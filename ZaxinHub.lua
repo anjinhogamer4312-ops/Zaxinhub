@@ -18,69 +18,69 @@ local WhiteList = {
     [LocalPlayer.Name] = "Developer"
 }
 
---// VARIÁVEIS GLOBAIS DE VOO
+--// VARIÁVEIS DO FLY
 local flying = false
-local flySpeed = 50 -- Valor inicial
-local bv, bg
+local flySpeed = 50
 local flyConn
+local bodyVelocity
+local bodyGyro
 
---// FUNÇÃO FLY (Atualizada para ler flySpeed dinamicamente)
+--// FUNÇÃO FLY (REFEITA PARA NÃO TRAVAR)
+local function StopFly()
+    flying = false
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChildOfClass("Humanoid") then
+        char.Humanoid.PlatformStand = false
+    end
+end
+
 local function StartFly()
-    if flying then return end
+    StopFly() -- Limpa qualquer fly anterior
     flying = true
     
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local root = char:WaitForChild("HumanoidRootPart")
-    local humanoid = char:WaitForChild("Humanoid")
+    local hum = char:WaitForChild("Humanoid")
 
-    -- Configuração Física
-    bg = Instance.new("BodyGyro", root)
-    bg.P = 9e4
-    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bg.CFrame = root.CFrame
-    
-    bv = Instance.new("BodyVelocity", root)
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    
-    -- Loop de Voo
+    bodyGyro = Instance.new("BodyGyro", root)
+    bodyGyro.P = 9e4
+    bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bodyGyro.CFrame = root.CFrame
+
+    bodyVelocity = Instance.new("BodyVelocity", root)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
     flyConn = RunService.RenderStepped:Connect(function()
-        if not flying or not char or not root then return end
+        if not flying or not root or not hum then return end
+        hum.PlatformStand = true
         
-        humanoid.PlatformStand = true
-        local frame = Camera.CFrame
-        local direction = Vector3.new(0,0,0)
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction = direction + frame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction = direction - frame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction = direction - frame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction = direction + frame.RightVector end
-        
-        -- Aplica a velocidade atual da variável global flySpeed
-        bv.Velocity = direction * flySpeed
-        bg.CFrame = frame
+        local lookVec = Camera.CFrame.LookVector
+        local rightVec = Camera.CFrame.RightVector
+        local moveDir = Vector3.new(0,0,0)
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + lookVec end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - lookVec end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - rightVec end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + rightVec end
+
+        bodyGyro.CFrame = Camera.CFrame
+        bodyVelocity.Velocity = moveDir * flySpeed
     end)
 end
 
-local function StopFly()
-    flying = false
-    if flyConn then flyConn:Disconnect() end
-    if bv then bv:Destroy() end
-    if bg then bg:Destroy() end
-    
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-        LocalPlayer.Character.Humanoid.PlatformStand = false
-    end
-end
-
---// FUNÇÃO VIEW & INVIS
+--// FUNÇÃO VIEW
 local function ViewPlayer(targetName)
     local target = Players:FindFirstChild(targetName)
     if target and target.Character then
-        Camera.CameraSubject = target.Character:FindFirstChild("Humanoid")
+        Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
     else
         if LocalPlayer.Character then
-            Camera.CameraSubject = LocalPlayer.Character:FindFirstChild("Humanoid")
+            Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         end
     end
 end
@@ -95,8 +95,8 @@ local function ProcessarComando(msg, autorNome)
     if alvo == LocalPlayer.Name:lower() or alvo == "all" then
         if cmd == ";fly" then StartFly()
         elseif cmd == ";unfly" then StopFly()
-        elseif cmd == ";kick" then LocalPlayer:Kick("Expulso por Admin: " .. autorNome)
         elseif cmd == ";kill" then LocalPlayer.Character:BreakJoints()
+        elseif cmd == ";kick" then LocalPlayer:Kick("Zaxin Hub Admin: " .. autorNome)
         elseif cmd == ";view" then ViewPlayer(autorNome)
         elseif cmd == ";unview" then ViewPlayer(LocalPlayer.Name)
         end
@@ -108,69 +108,59 @@ TextChatService.MessageReceived:Connect(function(msg)
 end)
 
 --// INTERFACE WINDUI
-if WhiteList[LocalPlayer.Name] then
-    local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-    local Window = WindUI:CreateWindow({
-        Title = "Zaxin Hub | Ultimate V5",
-        Author = "ZaxinX",
-        Size = UDim2.fromOffset(550, 480)
-    })
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local Window = WindUI:CreateWindow({
+    Title = "Zaxin Hub | V6 Fixed",
+    Author = "ZaxinX",
+    Size = UDim2.fromOffset(550, 480)
+})
 
-    -- ABA SELF (Com Slider Arrumado)
-    local TabMain = Window:Tab({Title = "Self", Icon = "user"})
-    local SecFly = TabMain:Section({Title = "Movimentação", Opened = true})
+-- ABA SELF
+local TabSelf = Window:Tab({Title = "Self", Icon = "user"})
+local SecFly = TabSelf:Section({Title = "Movimentação", Opened = true})
 
-    SecFly:Toggle({
-        Title = "Ativar Fly (Voo)",
-        Value = false,
-        Callback = function(state) 
-            if state then StartFly() else StopFly() end 
-        end
-    })
+SecFly:Toggle({
+    Title = "Ativar Fly (Voo)",
+    Value = false,
+    Callback = function(state) if state then StartFly() else StopFly() end end
+})
 
-    SecFly:Slider({
-        Title = "Velocidade do Fly",
-        Min = 10,
-        Max = 300,
-        Default = 50,
-        Step = 1, -- Adicionado Step para facilitar o movimento da barra
-        Callback = function(v) 
-            flySpeed = tonumber(v) -- Garante que o valor é atualizado globalmente
-        end
-    })
+SecFly:Slider({
+    Title = "Velocidade",
+    Min = 10, Max = 300, Default = 50,
+    Callback = function(v) flySpeed = v end
+})
 
-    -- ABA ADMIN (Com Kill, Kick, View, Unview)
-    local TabAdmin = Window:Tab({Title = "Admin", Icon = "shield"})
-    local SecPlayer = TabAdmin:Section({Title = "Gerenciar Jogadores", Opened = true})
+-- ABA ADMIN
+local TabAdmin = Window:Tab({Title = "Admin", Icon = "shield"})
+local SecAdmin = TabAdmin:Section({Title = "Gerenciar Jogadores", Opened = true})
 
-    local selecionado
-    local function GetPlayersList()
-        local t = {}
-        for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end
-        return t
-    end
-
-    local Dropdown = SecPlayer:Dropdown({
-        Title = "Selecionar Alvo",
-        Values = GetPlayersList(),
-        Callback = function(v) selecionado = v end
-    })
-
-    Players.PlayerAdded:Connect(function() Dropdown:SetValues(GetPlayersList()) end)
-    Players.PlayerRemoving:Connect(function() Dropdown:SetValues(GetPlayersList()) end)
-
-    local function SendCmd(cmd)
-        if selecionado then
-            local ch = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if ch then ch:SendAsync(cmd .. " " .. selecionado) end
-        end
-    end
-
-    SecPlayer:Button({Title = "KILL (MATAR)", Callback = function() SendCmd(";kill") end})
-    SecPlayer:Button({Title = "KICK (EXPULSAR)", Callback = function() SendCmd(";kick") end})
-    SecPlayer:Button({Title = "VIEW (ESPIAR)", Callback = function() if selecionado then ViewPlayer(selecionado) end end})
-    SecPlayer:Button({Title = "UNVIEW (PARAR ESPIAR)", Callback = function() ViewPlayer(LocalPlayer.Name) end})
+local selecionado
+local function GetPlayersList()
+    local t = {}
+    for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end
+    return t
 end
 
--- Notificação
-print("Zaxin Hub Carregado e Corrigido!")
+local Dropdown = SecAdmin:Dropdown({
+    Title = "Selecionar Alvo",
+    Values = GetPlayersList(),
+    Callback = function(v) selecionado = v end
+})
+
+Players.PlayerAdded:Connect(function() Dropdown:SetValues(GetPlayersList()) end)
+Players.PlayerRemoving:Connect(function() Dropdown:SetValues(GetPlayersList()) end)
+
+local function SendCmd(cmd)
+    if selecionado then
+        local ch = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if ch then ch:SendAsync(cmd .. " " .. selecionado) end
+    end
+end
+
+SecAdmin:Button({Title = "KILL", Callback = function() SendCmd(";kill") end})
+SecAdmin:Button({Title = "KICK", Callback = function() SendCmd(";kick") end})
+SecAdmin:Button({Title = "VIEW", Callback = function() if selecionado then ViewPlayer(selecionado) end end})
+SecAdmin:Button({Title = "UNVIEW", Callback = function() ViewPlayer(LocalPlayer.Name) end})
+
+print("Zaxin Hub: Fly corrigido e pronto!")
