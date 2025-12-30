@@ -1,164 +1,130 @@
+
+
 --// Serviços
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
---// Tabelas de Configuração (ATUALIZADO COM 10pereirazzk)
+--// Configurações Whitelist
 local Autorizados = {
     ["10pereirazzk"] = true,
     ["fh_user1"] = true,
-    ["Zelaojg"] = true,
-    ["joaoluizzx"] = true,
     ["ZaxinX"] = true,
-    [LocalPlayer.Name] = true 
-}
-
-local WhiteList = {
-    ["10pereirazzk"] = "Admin-User",
-    ["fh_user1"] = "Owner",
-    ["Zelaojg"] = "Parceiro",
-    ["joaoluizzx"] = "Staff",
+    [LocalPlayer.Name] = true
 }
 
 --// Variáveis de Controle
 local flying = false
 local flySpeed = 50
-local bodyGyro, bodyVelocity
+local noclip = false
+local noclipConnection
+local espEnabled = false
+local espSettings = { boxes = false, names = false, tracers = false }
 
---// --- FUNÇÕES DE COMANDO ---
+--// --- SISTEMA DE ESP (VISUAL) ---
+local function createESP(player)
+    local box = Drawing.new("Square")
+    box.Visible = false; box.Color = Color3.new(1, 0, 0); box.Thickness = 1; box.Filled = false
 
-local function MostrarJumpscare(imgId, sndId)
-    local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-    local img = Instance.new("ImageLabel", gui)
-    img.Size = UDim2.new(1,0,1,0)
-    img.Image = imgId
-    img.BackgroundTransparency = 1
-    local s = Instance.new("Sound", workspace)
-    s.SoundId = sndId
-    s.Volume = 10
-    s:Play()
-    task.wait(3)
-    gui:Destroy()
-    s:Destroy()
+    local name = Drawing.new("Text")
+    name.Visible = false; name.Color = Color3.new(1, 1, 1); name.Size = 16; name.Center = true; name.Outline = true
+
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false; tracer.Color = Color3.new(1, 0, 0); tracer.Thickness = 1
+
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player ~= LocalPlayer and espEnabled then
+            local rootPart = player.Character.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+
+            if onScreen then
+                -- Logica das Boxes
+                if espSettings.boxes then
+                    box.Size = Vector2.new(2000 / pos.Z, 3000 / pos.Z)
+                    box.Position = Vector2.new(pos.X - box.Size.X / 2, pos.Y - box.Size.Y / 2)
+                    box.Visible = true
+                else box.Visible = false end
+
+                -- Logica dos Nomes
+                if espSettings.names then
+                    name.Position = Vector2.new(pos.X, pos.Y - (3500 / pos.Z) / 2 - 20)
+                    name.Text = player.Name .. " [" .. math.floor((rootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"
+                    name.Visible = true
+                else name.Visible = false end
+
+                -- Logica dos Tracers
+                if espSettings.tracers then
+                    tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    tracer.To = Vector2.new(pos.X, pos.Y)
+                    tracer.Visible = true
+                else tracer.Visible = false end
+            else
+                box.Visible = false; name.Visible = false; tracer.Visible = false
+            end
+        else
+            box.Visible = false; name.Visible = false; tracer.Visible = false
+            if not player.Parent then connection:Disconnect(); box:Remove(); name:Remove(); tracer:Remove() end
+        end
+    end)
 end
 
-local function toggleFly()
-    flying = not flying
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum then return end
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
 
-    if flying then
-        hum.PlatformStand = true
-        bodyGyro = Instance.new("BodyGyro", root)
-        bodyGyro.P = 9e4
-        bodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-        bodyVelocity = Instance.new("BodyVelocity", root)
-        bodyVelocity.maxForce = Vector3.new(9e9, 9e9, 9e9)
-
-        task.spawn(function()
-            while flying do
-                local cam = workspace.CurrentCamera
-                bodyGyro.cframe = cam.CFrame
-                if hum.MoveDirection.Magnitude > 0 then
-                    bodyVelocity.velocity = cam.CFrame.LookVector * flySpeed
-                else
-                    bodyVelocity.velocity = Vector3.new(0,0,0)
+--// --- FUNÇÕES DE MOVIMENTAÇÃO ---
+local function toggleNoclip(state)
+    noclip = state
+    if noclip then
+        noclipConnection = RunService.Stepped:Connect(function()
+            if noclip and LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
                 end
-                task.wait()
             end
         end)
-    else
-        hum.PlatformStand = false
-        if bodyGyro then bodyGyro:Destroy() end
-        if bodyVelocity then bodyVelocity:Destroy() end
-    end
+    else if noclipConnection then noclipConnection:Disconnect() end end
 end
 
-local function ProcessarComando(msg, autorNome)
-    local texto = msg:lower()
-    local meuNome = LocalPlayer.Name:lower()
-    
-    -- Jumpscares
-    if texto:match(";jumps1%s+"..meuNome) then MostrarJumpscare("rbxassetid://126754882337711", "rbxassetid://138873214826309") end
-    if texto:match(";jumps2%s+"..meuNome) then MostrarJumpscare("rbxassetid://86379969987314", "rbxassetid://143942090") end
-    if texto:match(";jumps3%s+"..meuNome) then MostrarJumpscare("rbxassetid://127382022168206", "rbxassetid://143942090") end
-    if texto:match(";jumps4%s+"..meuNome) then MostrarJumpscare("rbxassetid://95973611964555", "rbxassetid://138873214826309") end
-
-    -- Admin
-    if texto:match(";kick%s+"..meuNome) then LocalPlayer:Kick("Zaxin Hub Admin") end
-    if texto:match(";kill%s+"..meuNome) then if LocalPlayer.Character then LocalPlayer.Character:BreakJoints() end end
-    
-    if texto:match(";freeze%s+"..meuNome) then 
-        local h = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = 0 h.JumpPower = 0 end 
-    end
-    
-    if texto:match(";unfreeze%s+"..meuNome) then 
-        local h = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed = 16 h.JumpPower = 50 end 
-    end
-
-    if texto:match(";verifique%s+"..meuNome) then
-        local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if canal then canal:SendAsync("Zaxin_Hub_User_Ativo") end
-    end
-end
-
---// Conexão Chat
-TextChatService.MessageReceived:Connect(function(msg)
-    if msg.TextSource then ProcessarComando(msg.Text, msg.TextSource.Name) end
-end)
-
---// Interface WindUI
+--// --- INTERFACE WINDUI ---
 if Autorizados[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     local Window = WindUI:CreateWindow({
         Title = "Zaxin Hub | Premium",
-        Icon = "shield-check",
         Author = "by: ZaxinX",
-        Size = UDim2.fromOffset(500, 400),
+        Size = UDim2.fromOffset(580, 460),
         Transparent = true
     })
 
-    local MainTab = Window:Tab({ Title = "Principal", Icon = "home" })
-    local SelfSection = MainTab:Section({ Title = "Local Player", Opened = true })
+    -- ABA SELF
+    local MainTab = Window:Tab({ Title = "Self", Icon = "user" })
+    local SectionMov = MainTab:Section({ Title = "Movimentação", Opened = true })
+    SectionMov:Toggle({ Title = "Noclip", Callback = function(s) toggleNoclip(s) end })
+    SectionMov:Slider({ Title = "Velocidade Fly", Min = 10, Max = 500, Callback = function(v) flySpeed = v end })
 
-    SelfSection:Slider({
-        Title = "Velocidade",
-        Min = 16, Max = 300, Default = 16,
-        Callback = function(v)
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = v
-            end
-        end
-    })
+    -- ABA VISUAL (ESP)
+    local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+    local SectionESP = VisualTab:Section({ Title = "ESP (Wallhack)", Opened = true })
+    
+    SectionESP:Toggle({ Title = "Ativar ESP Geral", Callback = function(s) espEnabled = s end })
+    SectionESP:Toggle({ Title = "Mostrar Boxes", Callback = function(s) espSettings.boxes = s end })
+    SectionESP:Toggle({ Title = "Mostrar Nomes", Callback = function(s) espSettings.names = s end })
+    SectionESP:Toggle({ Title = "Mostrar Tracers", Callback = function(s) espSettings.tracers = s end })
 
-    SelfSection:Toggle({
-        Title = "Voar (Fly)",
-        Value = false,
-        Callback = function() toggleFly() end
-    })
-
-    local AdminTab = Window:Tab({ Title = "Admin", Icon = "user" })
-    local AdminSec = AdminTab:Section({ Title = "Comandos", Opened = true })
-
+    -- ABA ADMIN
+    local AdminTab = Window:Tab({ Title = "Admin", Icon = "shield" })
+    local SectionAdmin = AdminTab:Section({ Title = "Comandos", Opened = true })
     local Target = ""
-    AdminSec:Dropdown({
-        Title = "Selecionar Alvo",
+    SectionAdmin:Dropdown({
+        Title = "Alvo",
         Values = (function() local t = {} for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end return t end)(),
         Callback = function(v) Target = v end
     })
-
-    local function Enviar(c)
-        local ch = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if ch and Target ~= "" then ch:SendAsync(";"..c.." "..Target) end
-    end
-
-    AdminSec:Button({ Title = "KILL", Callback = function() Enviar("kill") end })
-    AdminSec:Button({ Title = "KICK", Callback = function() Enviar("kick") end })
+    SectionAdmin:Button({ Title = "VIEW", Callback = function() 
+        local p = Players:FindFirstChild(Target)
+        if p and p.Character then Camera.CameraSubject = p.Character.Humanoid end
+    end })
 end
