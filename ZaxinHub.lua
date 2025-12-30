@@ -6,7 +6,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
 
---// WHITELIST (10pereirazzk com acesso total)
+--// WHITELIST (Acesso Total: 10pereirazzk)
 local WhiteList = {
     ["fh_user1"] = "Owner",
     ["Zelaojg"] = "Parceiro",
@@ -20,17 +20,19 @@ local WhiteList = {
 --// VARIÁVEIS
 local flying = false
 local flySpeed = 50
-local flyConn, bodyVelocity, bodyGyro
+local flyConn, bv, bg
 local selecionado = nil
 
---// FUNÇÃO FLY
+--// FUNÇÃO FLY (REVISADA - SEM TRAVAR)
 local function StopFly()
     flying = false
     if flyConn then flyConn:Disconnect() flyConn = nil end
-    if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    if bv then bv:Destroy() bv = nil end
+    if bg then bg:Destroy() bg = nil end
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
         LocalPlayer.Character.Humanoid.PlatformStand = false
+        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root then root.Velocity = Vector3.new(0,0,0) end
     end
 end
 
@@ -41,11 +43,11 @@ local function StartFly()
     local root = char:WaitForChild("HumanoidRootPart")
     local hum = char:WaitForChild("Humanoid")
 
-    bodyGyro = Instance.new("BodyGyro", root)
-    bodyGyro.P = 9e4
-    bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bodyVelocity = Instance.new("BodyVelocity", root)
-    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bg = Instance.new("BodyGyro", root)
+    bg.P = 9e4
+    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bv = Instance.new("BodyVelocity", root)
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
 
     flyConn = RunService.RenderStepped:Connect(function()
         if not flying or not root then return end
@@ -56,12 +58,12 @@ local function StartFly()
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-        bodyGyro.CFrame = camCF
-        bodyVelocity.Velocity = moveDir.Magnitude > 0 and moveDir.Unit * flySpeed or Vector3.new(0,0,0)
+        bg.CFrame = camCF
+        bv.Velocity = moveDir.Magnitude > 0 and moveDir.Unit * flySpeed or Vector3.new(0,0,0)
     end)
 end
 
---// FUNÇÃO FLING TARGET (ARREMESSAR PLAYER SELECIONADO)
+--// FUNÇÃO FLING (PARA TIRAR QUEM NÃO USA SCRIPT)
 local function FlingPlayer(targetName)
     local target = Players:FindFirstChild(targetName)
     local char = LocalPlayer.Character
@@ -70,49 +72,47 @@ local function FlingPlayer(targetName)
     if target and target.Character and root then
         local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
         if tRoot then
-            -- Armazena posição original
             local oldCF = root.CFrame
-            -- Ativa força de giro
             local bva = Instance.new("BodyAngularVelocity", root)
-            bva.AngularVelocity = Vector3.new(0, 99999, 0)
+            bva.AngularVelocity = Vector3.new(999999, 999999, 999999)
             bva.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
             
-            -- Teleporta para o alvo repetidamente para garantir o fling
+            local start = tick()
             local connection
             connection = RunService.Heartbeat:Connect(function()
-                if not target.Character or not bva.Parent then connection:Disconnect() return end
-                root.CFrame = tRoot.CFrame * CFrame.new(0, 0, 1)
+                if tick() - start > 1.5 or not tRoot then
+                    connection:Disconnect()
+                    bva:Destroy()
+                    root.CFrame = oldCF
+                    return
+                end
+                root.CFrame = tRoot.CFrame
             end)
-            
-            task.wait(0.5) -- Tempo do ataque
-            connection:Disconnect()
-            bva:Destroy()
-            root.CFrame = oldCF -- Volta para onde estava
         end
     end
 end
 
---// INTERFACE WINDUI V15
+--// INTERFACE WINDUI V18
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Window = WindUI:CreateWindow({
-    Title = "Zaxin Hub | V15 Fling Player",
+    Title = "Zaxin Hub | V18 Kick & Fling",
     Author = "ZaxinX",
-    Size = UDim2.fromOffset(550, 550)
+    Size = UDim2.fromOffset(550, 560)
 })
 
--- ABA SELF (CONFIGURAÇÕES)
+-- ABA SELF (Ajustes de número e voo)
 local TabSelf = Window:Tab({Title = "Self", Icon = "user"})
 local SecDigit = TabSelf:Section({Title = "Configurações (Clique e Digite)"})
 
 SecDigit:Input({
     Title = "Definir Velocidade Fly",
-    Placeholder = "Ex: 150",
+    Placeholder = "Ex: 250",
     Callback = function(t) flySpeed = tonumber(t) or flySpeed end
 })
 
 SecDigit:Input({
     Title = "Definir Gravidade",
-    Placeholder = "Ex: 50",
+    Placeholder = "Padrão: 196",
     Callback = function(t) workspace.Gravity = tonumber(t) or workspace.Gravity end
 })
 
@@ -123,40 +123,34 @@ TabSelf:Toggle({Title = "Invisibilidade FE", Value = false, Callback = function(
     end
 end})
 
--- ABA ADMIN (AÇÕES NO ALVO)
+-- ABA ADMIN (Ações nos outros)
 local TabAdmin = Window:Tab({Title = "Admin & TP", Icon = "shield"})
-local SecAdmin = TabAdmin:Section({Title = "Gerenciar Jogador"})
+local SecAd = TabAdmin:Section({Title = "Ações no Alvo Selecionado"})
 
-SecAdmin:Dropdown({
-    Title = "Selecionar Alvo",
+SecAd:Dropdown({
+    Title = "Selecionar Jogador",
     Values = (function() local t = {} for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end return t end)(),
     Callback = function(v) selecionado = v end
 })
 
-SecAdmin:Button({
-    Title = "FLING (ARREMESSAR ALVO)",
-    Callback = function() if selecionado then FlingPlayer(selecionado) end end
-})
-
-SecAdmin:Button({
-    Title = "KICK (EXPULSAR)",
-    Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kick " .. selecionado) end end
-})
-
-SecAdmin:Button({
-    Title = "KILL (MATAR)",
-    Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) end end
-})
-
-SecAdmin:Button({
-    Title = "TP ATÉ ELE",
+SecAd:Button({
+    Title = "KICK (EXPULSAR JOGADOR)",
     Callback = function() 
-        local t = Players:FindFirstChild(selecionado)
-        if t then LocalPlayer.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame end 
+        if selecionado then 
+            -- Tenta expulsar via comando de chat (funciona se houver sistema de admin)
+            local chatChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if chatChannel then
+                chatChannel:SendAsync(";kick " .. selecionado)
+            end
+            WindUI:Notify({Title = "Comando Enviado", Content = "Tentando expulsar: " .. selecionado})
+        end 
     end
 })
 
-SecAdmin:Button({Title = "VIEW", Callback = function() Camera.CameraSubject = Players[selecionado].Character.Humanoid end})
-SecAdmin:Button({Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
+SecAd:Button({Title = "ULTRA FLING (SUMIR COM ELE)", Callback = function() if selecionado then FlingPlayer(selecionado) end end})
+SecAd:Button({Title = "KILL (MATAR)", Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) end end})
+SecAd:Button({Title = "TP ATÉ ELE", Callback = function() if selecionado then LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame end end})
+SecAd:Button({Title = "VIEW (VER)", Callback = function() if selecionado then Camera.CameraSubject = Players[selecionado].Character.Humanoid end end})
+SecAd:Button({Title = "UNVIEW (VOLTAR)", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
 
-print("Zaxin Hub V15: Fling por seleção e Inputs numéricos prontos!")
+print("Zaxin Hub V18: Kick e Fling para não-usuários prontos!")
