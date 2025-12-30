@@ -1,18 +1,28 @@
---// SERVIÇOS
+--// Serviços
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
---// EXECUTA O LOAD EXTERNO
-pcall(function()
-    loadstring(game:HttpGet("https://scriptsbinsauth.vercel.app/api/scripts/917fb298-61be-4615-9d7c-0e5b769b7360/raw"))()
-end)
+--// Tabelas de Configuração
+local Autorizados = {
+    ["fh_user1"] = true,
+    ["Zelaojg"] = true,
+    ["joaoluizzx"] = true,
+    ["ZaxinX"] = true, -- Adicione seu nome aqui
+    [LocalPlayer.Name] = true -- Remove essa linha se quiser testar a permissão real
+}
 
---// LISTA DE JUMPSCARES (DO SEU CÓDIGO)
+local WhiteList = {
+    ["fh_user1"] = "Owner",
+    ["Zelaojg"] = "Parceiro",
+    ["joaoluizzx"] = "Staff",
+    ["itz_starUwUspice"] = "Usuário-Admin",
+    ["tiai200"] = "Usuário-Admin",
+    ["nao"] = "Staff",
+}
+
 local JUMPSCARES = {
     { Name = ";jumps1", ImageId = "rbxassetid://126754882337711", AudioId = "rbxassetid://138873214826309" },
     { Name = ";jumps2", ImageId = "rbxassetid://86379969987314", AudioId = "rbxassetid://143942090" },
@@ -20,158 +30,190 @@ local JUMPSCARES = {
     { Name = ";jumps4", ImageId = "rbxassetid://95973611964555", AudioId = "rbxassetid://138873214826309" },
 }
 
---// WHITELIST (ADICIONADO 10PEREIRAZZK)
-local WhiteList = {
-    ["fh_user1"] = "Owner",
-    ["Zelaojg"] = "Parceiro",
-    ["joaoluizzx"] = "Staff",
-    ["itz_starUwUspice"] = "Usuário-Admin",
-    ["tiai200"] = "Usuário-Admin",
-    ["10pereirazzk"] = "Owner",
-    [LocalPlayer.Name] = "Developer"
-}
+--// Variáveis Globais de Controle
+local runningLoops = {}
+local playerOriginalSpeed = {}
+local jaulas = {}
+local jailConnections = {}
 
---// VARIÁVEIS DE CONTROLE
-local flySpeed = 50
-local flying = false
-local flyConn
-local selecionado = nil
+--// --- FUNÇÕES DE UTILIDADE ---
 
---// FUNÇÃO FLY (PEGANDO A LÓGICA DE MOVIMENTO PARA O SEU CÓDIGO)
-local function ToggleFly(state)
-    flying = state
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+local function createBillboard(playerName, displayText, guiName)
+    local target = workspace:FindFirstChild(playerName)
+    if not target then return end
+    local head = target:FindFirstChild("Head")
+    if not head or head:FindFirstChild(guiName) then return end
 
-    if not state then
-        if flyConn then flyConn:Disconnect() flyConn = nil end
-        if hum then hum.PlatformStand = false end
-        return
-    end
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = guiName
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 60)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 80
+    billboard.Parent = head
 
-    flyConn = RunService.RenderStepped:Connect(function(dt)
-        if not flying or not root then return end
-        root.Velocity = Vector3.new(0,0,0)
-        local moveDir = Vector3.new(0,0,0)
-        local camCF = Camera.CFrame
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir + Vector3.new(0,-1,0) end
-        
-        if moveDir.Magnitude > 0 then
-            root.CFrame = root.CFrame + (moveDir.Unit * flySpeed * dt)
+    local textBackground = Instance.new("Frame", billboard)
+    textBackground.Size = UDim2.new(1, 0, 0.5, 0)
+    textBackground.Position = UDim2.new(0, 0, 0.5, 0)
+    textBackground.BackgroundColor3 = Color3.fromRGB(128, 0, 255)
+    textBackground.BackgroundTransparency = 0.3
+    Instance.new("UICorner", textBackground).CornerRadius = UDim.new(0, 10)
+
+    local label = Instance.new("TextLabel", textBackground)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = displayText
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+end
+
+local function startGuiWatcher(playerName, displayText, guiName)
+    if runningLoops[guiName] then return end
+    runningLoops[guiName] = true
+    task.spawn(function()
+        while runningLoops[guiName] do
+            createBillboard(playerName, displayText, guiName)
+            task.wait(1)
         end
-        if hum then hum.PlatformStand = true end
     end)
 end
 
---// FUNÇÃO FLING (ARREMESSAR ALVO SELECIONADO)
-local function DoFling(targetName)
-    local target = Players:FindFirstChild(targetName)
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if target and target.Character and root then
-        local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
-        local oldCF = root.CFrame
-        local bva = Instance.new("BodyAngularVelocity", root)
-        bva.AngularVelocity = Vector3.new(0, 999999, 0)
-        bva.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        
-        local start = tick()
-        local conn
-        conn = RunService.Heartbeat:Connect(function()
-            if tick() - start > 1.3 or not tRoot then
-                conn:Disconnect() bva:Destroy() root.CFrame = oldCF return
-            end
-            root.CFrame = tRoot.CFrame * CFrame.new(math.random(-1,1), 0, math.random(-1,1))
-        end)
-    end
-end
-
---// FUNÇÃO ENVIAR COMANDO (DO SEU CÓDIGO)
 local function EnviarComando(comando, alvo)
     local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral") or TextChatService.TextChannels:GetChildren()[1]
-    if canal then
-        canal:SendAsync(";" .. comando .. " " .. (alvo or ""))
+    if canal and alvo then
+        canal:SendAsync(";" .. comando .. " " .. alvo)
     end
 end
 
---// PAINEL ZAXIN HUB (BASEADO NO SEU WINDUI)
-if WhiteList[LocalPlayer.Name] then
+local function MostrarJumpscare(imageId, audioId)
+    local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+    gui.IgnoreGuiInset = true
+    
+    local img = Instance.new("ImageLabel", gui)
+    img.Size = UDim2.new(1, 0, 1, 0)
+    img.BackgroundTransparency = 1
+    img.Image = imageId
+    img.ImageTransparency = 1
+
+    local sound = Instance.new("Sound", workspace)
+    sound.SoundId = audioId
+    sound.Volume = 5
+    sound:Play()
+    
+    TweenService:Create(img, TweenInfo.new(0.5), { ImageTransparency = 0 }):Play()
+    task.wait(2.5)
+    TweenService:Create(img, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
+    task.delay(0.5, function() gui:Destroy() sound:Destroy() end)
+end
+
+--// --- SISTEMA DE COMANDOS ---
+
+local function ExecutarComandoLocal(comando, autor)
+    local playerName = LocalPlayer.Name:lower()
+    local cmd = comando:lower()
+
+    for _, js in ipairs(JUMPSCARES) do
+        if cmd:match(js.Name .. "%s+" .. playerName) then
+            MostrarJumpscare(js.ImageId, js.AudioId)
+        end
+    end
+
+    if cmd:match(";kick%s+" .. playerName) then
+        LocalPlayer:Kick("Você foi expulso por Zaxin Hub")
+    end
+
+    if cmd:match(";kill%s+" .. playerName) then
+        if LocalPlayer.Character then LocalPlayer.Character:BreakJoints() end
+    end
+
+    if cmd:match(";freeze%s+" .. playerName) then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 0 end
+    end
+
+    if cmd:match(";unfreeze%s+" .. playerName) then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 16 end
+    end
+    
+    -- Comando de Verificação (Resposta Automática)
+    if cmd:match(";verifique%s+" .. playerName) then
+        local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if canal then canal:SendAsync("Zaxin_Hub_User_" .. math.random(1000, 9999)) end
+    end
+end
+
+--// Conexão do Chat
+TextChatService.MessageReceived:Connect(function(msg)
+    if msg.TextSource then
+        ExecutarComandoLocal(msg.Text, msg.TextSource.Name)
+    end
+end)
+
+--// Inicialização de Tags
+for name, tag in pairs(WhiteList) do
+    if Players:FindFirstChild(name) then startGuiWatcher(name, tag, "Tag_"..name) end
+end
+Players.PlayerAdded:Connect(function(p)
+    if WhiteList[p.Name] then startGuiWatcher(p.Name, WhiteList[p.Name], "Tag_"..p.Name) end
+end)
+
+--// --- INTERFACE (WindUI) ---
+if Autorizados[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     local Window = WindUI:CreateWindow({
         Title = "Zaxin Hub | Painel Admin",
         Icon = "shield",
         Author = "by: ZaxinX",
-        Size = UDim2.fromOffset(580, 500),
+        Folder = "ZaxinHub",
+        Size = UDim2.fromOffset(580, 460),
         Transparent = true
     })
 
-    -- TAB SELF (ONDE VOCÊ QUER COLOCAR OS NÚMEROS)
-    local TabSelf = Window:Tab({ Title = "Self", Icon = "user" })
-    local SecSet = TabSelf:Section({ Title = "Ajustes de Velocidade e Gravidade" })
+    local TabComandos = Window:Tab({ Title = "Comandos", Icon = "terminal" })
+    local SectionAdmin = TabComandos:Section({ Title = "Controle de Jogador", Opened = true })
 
-    SecSet:Input({
-        Title = "Velocidade Fly",
-        Placeholder = "Digite um número...",
-        Callback = function(t) flySpeed = tonumber(t) or flySpeed end
-    })
-
-    SecSet:Input({
-        Title = "Gravidade",
-        Placeholder = "Normal: 196",
-        Callback = function(t) workspace.Gravity = tonumber(t) or workspace.Gravity end
-    })
-
-    TabSelf:Toggle({Title = "Ativar Fly", Callback = function(s) ToggleFly(s) end})
-
-    -- TAB COMANDOS (IGUAL AO SEU CÓDIGO)
-    local TabAdmin = Window:Tab({ Title = "Comandos", Icon = "terminal" })
-    local Section = TabAdmin:Section({ Title = "Admin", Icon = "user-cog" })
-
-    local function getPlayersList()
+    local TargetName = ""
+    local function getPlayers()
         local t = {}
         for _, p in ipairs(Players:GetPlayers()) do table.insert(t, p.Name) end
         return t
     end
 
-    local Dropdown = Section:Dropdown({
+    local Dropdown = SectionAdmin:Dropdown({
         Title = "Selecionar Jogador",
-        Values = getPlayersList(),
-        Callback = function(opt) selecionado = opt end
+        Values = getPlayers(),
+        Callback = function(v) TargetName = v end
     })
 
-    Section:Button({Title = "FLING (ARREMESSAR)", Callback = function() if selecionado then DoFling(selecionado) end end})
-    Section:Button({Title = "KICK", Callback = function() if selecionado then EnviarComando("kick", selecionado) end end})
-    Section:Button({Title = "KILL", Callback = function() if selecionado then EnviarComando("kill", selecionado) end end})
-    Section:Button({Title = "TP ATÉ ELE", Callback = function() 
-        if selecionado and Players:FindFirstChild(selecionado) then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame
-        end
-    end})
+    -- Atualiza dropdown automaticamente
+    spawn(function()
+        while task.wait(5) do Dropdown:SetValues(getPlayers()) end
+    end)
 
-    -- TAB EFEITOS (OS JUMPSCARES DO SEU CÓDIGO)
+    local cmds = {"kick", "kill", "freeze", "unfreeze", "bring", "jail", "unjail", "verifique"}
+    for _, c in ipairs(cmds) do
+        SectionAdmin:Button({
+            Title = c:upper(),
+            Callback = function() EnviarComando(c, TargetName) end
+        })
+    end
+
     local TabEfeitos = Window:Tab({ Title = "Efeitos", Icon = "zap" })
-    local SecJump = TabEfeitos:Section({ Title = "Jumpscares" })
+    local SectionJS = TabEfeitos:Section({ Title = "Jumpscares", Opened = true })
 
-    local jumps = {"jumps1", "jumps2", "jumps3", "jumps4"}
-    for _, j in ipairs(jumps) do
-        SecJump:Button({
-            Title = j:upper(),
-            Callback = function() if selecionado then EnviarComando(j, selecionado) end end
+    for i = 1, 4 do
+        SectionJS:Button({
+            Title = "Jumpscare " .. i,
+            Callback = function() EnviarComando("jumps"..i, TargetName) end
         })
     end
 end
 
---// Som de carregamento
-local sound = Instance.new("Sound", workspace)
-sound.SoundId = "rbxassetid://8486683243"
-sound.Volume = 2
-sound:Play()
-game.Debris:AddItem(sound, 3)
-
-print("Zaxin Hub")
+-- Som de Sucesso
+local s = Instance.new("Sound", workspace)
+s.SoundId = "rbxassetid://8486683243"
+s:Play()
+game.Debris:AddItem(s, 3)
