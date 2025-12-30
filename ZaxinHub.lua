@@ -3,54 +3,56 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local UserInputService = game:GetService("UserInputService")
-
---// NOME FIXO
-local HUB_NAME = "Zaxin Hub"
 
 --// EXECUTA O LOAD EXTERNO
 pcall(function()
     loadstring(game:HttpGet("https://scriptsbinsauth.vercel.app/api/scripts/917fb298-61be-4615-9d7c-0e5b769b7360/raw"))()
 end)
 
---// WHITELIST (Acesso Total: 10pereirazzk)
+--// LISTA DE JUMPSCARES (DO SEU CÓDIGO)
+local JUMPSCARES = {
+    { Name = ";jumps1", ImageId = "rbxassetid://126754882337711", AudioId = "rbxassetid://138873214826309" },
+    { Name = ";jumps2", ImageId = "rbxassetid://86379969987314", AudioId = "rbxassetid://143942090" },
+    { Name = ";jumps3", ImageId = "rbxassetid://127382022168206", AudioId = "rbxassetid://143942090" },
+    { Name = ";jumps4", ImageId = "rbxassetid://95973611964555", AudioId = "rbxassetid://138873214826309" },
+}
+
+--// WHITELIST (ADICIONADO 10PEREIRAZZK)
 local WhiteList = {
     ["fh_user1"] = "Owner",
     ["Zelaojg"] = "Parceiro",
     ["joaoluizzx"] = "Staff",
     ["itz_starUwUspice"] = "Usuário-Admin",
     ["tiai200"] = "Usuário-Admin",
-    ["10pereirazzk"] = "Owner/Developer/Admin",
+    ["10pereirazzk"] = "Owner",
     [LocalPlayer.Name] = "Developer"
 }
 
 --// VARIÁVEIS DE CONTROLE
-local flying = false
 local flySpeed = 50
+local flying = false
 local flyConn
 local selecionado = nil
 
---// FUNÇÃO FLY (SISTEMA CFRAME - NÃO TRAVA)
-local function StopFly()
-    flying = false
-    if flyConn then flyConn:Disconnect() flyConn = nil end
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-        LocalPlayer.Character.Humanoid.PlatformStand = false
-    end
-end
+--// FUNÇÃO FLY (PEGANDO A LÓGICA DE MOVIMENTO PARA O SEU CÓDIGO)
+local function ToggleFly(state)
+    flying = state
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-local function StartFly()
-    StopFly()
-    flying = true
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local root = char:WaitForChild("HumanoidRootPart")
-    
+    if not state then
+        if flyConn then flyConn:Disconnect() flyConn = nil end
+        if hum then hum.PlatformStand = false end
+        return
+    end
+
     flyConn = RunService.RenderStepped:Connect(function(dt)
         if not flying or not root then return end
         root.Velocity = Vector3.new(0,0,0)
-        
         local moveDir = Vector3.new(0,0,0)
         local camCF = Camera.CFrame
         
@@ -64,11 +66,12 @@ local function StartFly()
         if moveDir.Magnitude > 0 then
             root.CFrame = root.CFrame + (moveDir.Unit * flySpeed * dt)
         end
+        if hum then hum.PlatformStand = true end
     end)
 end
 
---// FUNÇÃO FLING (ARREMESSAR ALVO)
-local function FlingTarget(targetName)
+--// FUNÇÃO FLING (ARREMESSAR ALVO SELECIONADO)
+local function DoFling(targetName)
     local target = Players:FindFirstChild(targetName)
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if target and target.Character and root then
@@ -89,7 +92,7 @@ local function FlingTarget(targetName)
     end
 end
 
---// ENVIAR COMANDO CHAT
+--// FUNÇÃO ENVIAR COMANDO (DO SEU CÓDIGO)
 local function EnviarComando(comando, alvo)
     local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral") or TextChatService.TextChannels:GetChildren()[1]
     if canal then
@@ -97,63 +100,66 @@ local function EnviarComando(comando, alvo)
     end
 end
 
---// INTERFACE WINDUI (ZAXIN HUB)
+--// PAINEL ZAXIN HUB (BASEADO NO SEU WINDUI)
 if WhiteList[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     local Window = WindUI:CreateWindow({
-        Title = HUB_NAME,
+        Title = "Zaxin Hub | Painel Admin",
         Icon = "shield",
         Author = "by: ZaxinX",
         Size = UDim2.fromOffset(580, 500),
         Transparent = true
     })
 
-    -- ABA SELF
+    -- TAB SELF (ONDE VOCÊ QUER COLOCAR OS NÚMEROS)
     local TabSelf = Window:Tab({ Title = "Self", Icon = "user" })
-    local SecSet = TabSelf:Section({ Title = "Configurações (Digite e Enter)" })
+    local SecSet = TabSelf:Section({ Title = "Ajustes de Velocidade e Gravidade" })
 
     SecSet:Input({
-        Title = "Velocidade do Fly",
-        Placeholder = "Digite número...",
+        Title = "Velocidade Fly",
+        Placeholder = "Digite um número...",
         Callback = function(t) flySpeed = tonumber(t) or flySpeed end
     })
 
     SecSet:Input({
-        Title = "Gravidade do Mapa",
-        Placeholder = "Digite número...",
+        Title = "Gravidade",
+        Placeholder = "Normal: 196",
         Callback = function(t) workspace.Gravity = tonumber(t) or workspace.Gravity end
     })
 
-    TabSelf:Toggle({Title = "Ativar Fly", Callback = function(s) if s then StartFly() else StopFly() end end})
-    TabSelf:Toggle({Title = "Invisibilidade FE", Callback = function(s)
-        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") or v:IsA("Decal") then v.Transparency = s and 1 or 0 end
+    TabSelf:Toggle({Title = "Ativar Fly", Callback = function(s) ToggleFly(s) end})
+
+    -- TAB COMANDOS (IGUAL AO SEU CÓDIGO)
+    local TabAdmin = Window:Tab({ Title = "Comandos", Icon = "terminal" })
+    local Section = TabAdmin:Section({ Title = "Admin", Icon = "user-cog" })
+
+    local function getPlayersList()
+        local t = {}
+        for _, p in ipairs(Players:GetPlayers()) do table.insert(t, p.Name) end
+        return t
+    end
+
+    local Dropdown = Section:Dropdown({
+        Title = "Selecionar Jogador",
+        Values = getPlayersList(),
+        Callback = function(opt) selecionado = opt end
+    })
+
+    Section:Button({Title = "FLING (ARREMESSAR)", Callback = function() if selecionado then DoFling(selecionado) end end})
+    Section:Button({Title = "KICK", Callback = function() if selecionado then EnviarComando("kick", selecionado) end end})
+    Section:Button({Title = "KILL", Callback = function() if selecionado then EnviarComando("kill", selecionado) end end})
+    Section:Button({Title = "TP ATÉ ELE", Callback = function() 
+        if selecionado and Players:FindFirstChild(selecionado) then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame
         end
     end})
 
-    -- ABA ADMIN
-    local TabAdmin = Window:Tab({ Title = "Admin", Icon = "terminal" })
-    local SecAd = TabAdmin:Section({ Title = "Controle de Jogadores" })
+    -- TAB EFEITOS (OS JUMPSCARES DO SEU CÓDIGO)
+    local TabEfeitos = Window:Tab({ Title = "Efeitos", Icon = "zap" })
+    local SecJump = TabEfeitos:Section({ Title = "Jumpscares" })
 
-    SecAd:Dropdown({
-        Title = "Selecionar Alvo",
-        Values = (function() local t = {} for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end return t end)(),
-        Callback = function(v) selecionado = v end
-    })
-
-    SecAd:Button({Title = "FLING (ARREMESSAR)", Callback = function() if selecionado then FlingTarget(selecionado) end end})
-    SecAd:Button({Title = "KICK (EXPULSAR)", Callback = function() if selecionado then EnviarComando("kick", selecionado) end end})
-    SecAd:Button({Title = "KILL (MATAR)", Callback = function() if selecionado then EnviarComando("kill", selecionado) end end})
-    SecAd:Button({Title = "TP ATÉ ELE", Callback = function() if selecionado then LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame end end})
-    SecAd:Button({Title = "VIEW", Callback = function() if selecionado then Camera.CameraSubject = Players[selecionado].Character.Humanoid end end})
-    SecAd:Button({Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
-
-    -- ABA EFEITOS (JUMPSCARES)
-    local TabJump = Window:Tab({ Title = "Efeitos", Icon = "zap" })
-    local SecJump = TabJump:Section({ Title = "Jumpscares" })
-
-    local jComands = {"jumps1", "jumps2", "jumps3", "jumps4"}
-    for _, j in ipairs(jComands) do
+    local jumps = {"jumps1", "jumps2", "jumps3", "jumps4"}
+    for _, j in ipairs(jumps) do
         SecJump:Button({
             Title = j:upper(),
             Callback = function() if selecionado then EnviarComando(j, selecionado) end end
@@ -161,12 +167,11 @@ if WhiteList[LocalPlayer.Name] then
     end
 end
 
---// SOM DE CARREGAMENTO
-local s = Instance.new("Sound", workspace)
-s.SoundId = "rbxassetid://8486683243"
-s.Volume = 2
-s:Play()
-game.Debris:AddItem(s, 3)
+--// Som de carregamento
+local sound = Instance.new("Sound", workspace)
+sound.SoundId = "rbxassetid://8486683243"
+sound.Volume = 2
+sound:Play()
+game.Debris:AddItem(sound, 3)
 
---// ÚLTIMA LINHA ALTERADA COMO PEDIDO
 print("Zaxin Hub")
