@@ -16,7 +16,7 @@ local LocalPlayer = Players.LocalPlayer
 
 pcall(function()
 
-    loadstring(game:HttpGet("https://scriptsbinsauth.vercel.app/api/scripts/917fb298-61be-4615-9d7c-0e5b769b7360/raw"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/anjinhogamer4312-ops/Zaxinhub/refs/heads/main/ZaxinHub"))()
 
 end)
 
