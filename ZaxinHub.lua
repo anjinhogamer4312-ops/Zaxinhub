@@ -4,8 +4,9 @@ local TweenService = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
---// WHITELIST (Ranks)
+--// WHITELIST
 local WhiteList = {
     ["fh_user1"] = "Owner",
     ["Zelaojg"] = "Parceiro",
@@ -13,109 +14,89 @@ local WhiteList = {
     ["itz_starUwUspice"] = "Admin",
     ["tiai200"] = "Admin",
     ["10pereirazzk"] = "Owner",
-    [LocalPlayer.Name] = "Developer" -- Você sempre autorizado
+    [LocalPlayer.Name] = "Developer"
 }
 
---// JUMPSCARES
-local JUMPSCARES = {
-    [";jumps1"] = {Img = "rbxassetid://126754882337711", Snd = "rbxassetid://138873214826309"},
-    [";jumps2"] = {Img = "rbxassetid://86379969987314", Snd = "rbxassetid://143942090"},
-    [";jumps3"] = {Img = "rbxassetid://127382022168206", Snd = "rbxassetid://143942090"},
-    [";jumps4"] = {Img = "rbxassetid://95973611964555", Snd = "rbxassetid://138873214826309"},
-}
+--// VARIÁVEIS DE CONTROLE
+local viewingPlayer = nil
+local invisivel = false
 
---// FUNÇÃO TAG (Visual)
-local function CriarTag(player, texto)
-    local char = player.Character or player.CharacterAdded:Wait()
-    local head = char:WaitForChild("Head", 5)
-    if not head or head:FindFirstChild("RankTag") then return end
-
-    local gui = Instance.new("BillboardGui", head)
-    gui.Name = "RankTag"
-    gui.Size = UDim2.new(0, 100, 0, 50)
-    gui.StudsOffset = Vector3.new(0, 3, 0)
-    gui.AlwaysOnTop = true
-
-    local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(120, 0, 255)
-    frame.BackgroundTransparency = 0.3
-    Instance.new("UICorner", frame)
-
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1, 0, 1, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = texto
-    lbl.TextColor3 = Color3.new(1, 1, 1)
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextScaled = true
-end
-
---// MOSTRAR JUMPSCARE
-local function MostrarJumpscare(data)
-    local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-    local img = Instance.new("ImageLabel", gui)
-    img.Size = UDim2.new(1, 0, 1, 0)
-    img.Image = data.Img
-    img.BackgroundTransparency = 1
+--// FUNÇÃO INVISIBILIDADE (Local)
+local function ToggleInvis(state)
+    local char = LocalPlayer.Character
+    if not char then return end
+    invisivel = state
     
-    local sound = Instance.new("Sound", workspace)
-    sound.SoundId = data.Snd
-    sound.Volume = 5
-    sound:Play()
-
-    TweenService:Create(img, TweenInfo.new(0.5), {ImageTransparency = 0}):Play()
-    task.delay(3, function()
-        gui:Destroy()
-        sound:Destroy()
-    end)
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            part.Transparency = state and 1 or 0
+            if part.Name == "HumanoidRootPart" then part.Transparency = 1 end
+        end
+    end
+    -- Nota: No Brookhaven, invisibilidade total para outros depende do seu executor (Script Hubs)
 end
 
---// ESCUTAR COMANDOS (Compatível com Brookhaven)
+--// FUNÇÃO VIEW (Observar)
+local function ViewPlayer(targetName)
+    local target = Players:FindFirstChild(targetName)
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        Camera.CameraSubject = target.Character.Humanoid
+        viewingPlayer = target
+    else
+        Camera.CameraSubject = LocalPlayer.Character.Humanoid
+        viewingPlayer = nil
+    end
+end
+
+--// ESCUTAR COMANDOS
 local function ProcessarComando(msg, autorNome)
-    if not WhiteList[autorNome] then return end -- Só aceita comando de quem é Whitelist
+    if not WhiteList[autorNome] then return end
     
     local args = msg:lower():split(" ")
     local cmd = args[1]
     local alvo = args[2]
 
-    if alvo == LocalPlayer.Name:lower() or alvo == "all" then
-        if JUMPSCARES[cmd] then
-            MostrarJumpscare(JUMPSCARES[cmd])
+    if alvo == LocalPlayer.Name:lower() then
+        if cmd == ";view" then
+            ViewPlayer(autorNome) -- Admin vê você
+        elseif cmd == ";unview" then
+            ViewPlayer(LocalPlayer.Name)
         elseif cmd == ";kill" then
             LocalPlayer.Character:BreakJoints()
-        elseif cmd == ";kick" then
-            LocalPlayer:Kick("Expulso por: " .. autorNome)
-        elseif cmd == ";freeze" then
-            LocalPlayer.Character.Humanoid.WalkSpeed = 0
-        elseif cmd == ";unfreeze" then
-            LocalPlayer.Character.Humanoid.WalkSpeed = 16
         end
     end
 end
 
---// CONEXÃO CHAT NOVO
 TextChatService.MessageReceived:Connect(function(msg)
-    if msg.TextSource then
-        ProcessarComando(msg.Text, msg.TextSource.Name)
-    end
+    if msg.TextSource then ProcessarComando(msg.Text, msg.TextSource.Name) end
 end)
 
---// INTERFACE WINDUI
+--// INTERFACE WINDUI ATUALIZADA
 if WhiteList[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-    local Window = Window or WindUI:CreateWindow({
-        Title = "Zaxin Hub | Admin",
+    local Window = WindUI:CreateWindow({
+        Title = "Zaxin Hub | Premium",
         Author = "ZaxinX",
-        Size = UDim2.fromOffset(500, 400)
+        Size = UDim2.fromOffset(550, 450)
     })
 
-    local Tab = Window:Tab({Title = "Comandos", Icon = "terminal"})
-    local Sec = Tab:Section({Title = "Ações", Opened = true})
+    local TabMain = Window:Tab({Title = "Principal", Icon = "user"})
+    local SecSelf = TabMain:Section({Title = "Auto Comandos", Opened = true})
+
+    -- Toggle Invisibilidade
+    SecSelf:Toggle({
+        Title = "Invisibilidade Local",
+        Value = false,
+        Callback = function(state) ToggleInvis(state) end
+    })
+
+    -- Seção de Jogadores
+    local TabPlayers = Window:Tab({Title = "Jogadores", Icon = "users"})
+    local SecView = TabPlayers:Section({Title = "Observar / Admin", Opened = true})
 
     local selecionado
-    local drop = Sec:Dropdown({
-        Title = "Selecionar Alvo",
+    local drop = SecView:Dropdown({
+        Title = "Selecionar Jogador",
         Values = (function() 
             local t = {} 
             for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end 
@@ -124,23 +105,28 @@ if WhiteList[LocalPlayer.Name] then
         Callback = function(v) selecionado = v end
     })
 
-    local cmds = {";kill", ";kick", ";jumps1", ";jumps2", ";freeze", ";unfreeze"}
-    for _, c in ipairs(cmds) do
-        Sec:Button({
-            Title = c:upper(),
-            Callback = function()
-                if selecionado then
-                    -- No Roblox, você só "fala" o comando. 
-                    -- Se o alvo estiver com o script aberto, ele vai obedecer.
-                    local channel = TextChatService.TextChannels.RBXGeneral
-                    channel:SendAsync(c .. " " .. selecionado)
-                end
+    SecView:Button({
+        Title = "ESPIAR (VIEW)",
+        Callback = function() if selecionado then ViewPlayer(selecionado) end end
+    })
+
+    SecView:Button({
+        Title = "PARAR ESPIAR (UNVIEW)",
+        Callback = function() ViewPlayer(LocalPlayer.Name) end
+    })
+
+    SecView:Button({
+        Title = "MATAR (SÓ SE ELE TIVER O SCRIPT)",
+        Callback = function()
+            if selecionado then
+                local channel = TextChatService.TextChannels.RBXGeneral
+                channel:SendAsync(";kill " .. selecionado)
             end
-        })
-    end
+        end
+    })
 end
 
--- Iniciar tags para quem já está no jogo
-for _, p in pairs(Players:GetPlayers()) do
-    if WhiteList[p.Name] then CriarTag(p, WhiteList[p.Name]) end
-end
+-- Som ao carregar
+local s = Instance.new("Sound", workspace)
+s.SoundId = "rbxassetid://8486683243"
+s:Play()
