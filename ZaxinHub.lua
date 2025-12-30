@@ -21,60 +21,7 @@ local WhiteList = {
 local flying = false
 local flySpeed = 50
 local flyConn, bodyVelocity, bodyGyro
-local flingEnabled = false
-local flingAnim
-
---// FUNÇÃO FLING BALL (GIRAR E ARREMESSAR)
-local function ToggleFling(state)
-    flingEnabled = state
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if state and root then
-        -- Cria a força de rotação extrema
-        local angularVelocity = Instance.new("BodyAngularVelocity")
-        angularVelocity.Name = "FlingForce"
-        angularVelocity.Parent = root
-        angularVelocity.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        angularVelocity.AngularVelocity = Vector3.new(0, 99999, 0) -- Velocidade do giro
-        
-        -- Deixa o personagem "escorregadio" para não travar nos outros
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
-            end
-        end
-    else
-        if root and root:FindFirstChild("FlingForce") then
-            root.FlingForce:Destroy()
-        end
-    end
-end
-
---// FUNÇÃO TELEPORTE
-local function TeleportToPlayer(targetName)
-    local target = Players:FindFirstChild(targetName)
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        local myRoot = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if myRoot then
-            myRoot.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
-        end
-    end
-end
-
---// FUNÇÃO INVISIBILIDADE (FE)
-local function ToggleInvis(state)
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, v in pairs(char:GetDescendants()) do
-        if v:IsA("BasePart") or v:IsA("Decal") then
-            v.Transparency = state and 1 or (v.Name == "HumanoidRootPart" and 1 or 0)
-        end
-        if v:IsA("Accessory") then
-            v.Handle.Transparency = state and 1 or 0
-        end
-    end
-end
+local selecionado = nil
 
 --// FUNÇÃO FLY
 local function StopFly()
@@ -105,64 +52,111 @@ local function StartFly()
         hum.PlatformStand = true
         local moveDir = Vector3.new(0,0,0)
         local camCF = Camera.CFrame
-        
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-        
         bodyGyro.CFrame = camCF
         bodyVelocity.Velocity = moveDir.Magnitude > 0 and moveDir.Unit * flySpeed or Vector3.new(0,0,0)
     end)
 end
 
---// INTERFACE WINDUI
+--// FUNÇÃO FLING TARGET (ARREMESSAR PLAYER SELECIONADO)
+local function FlingPlayer(targetName)
+    local target = Players:FindFirstChild(targetName)
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if target and target.Character and root then
+        local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        if tRoot then
+            -- Armazena posição original
+            local oldCF = root.CFrame
+            -- Ativa força de giro
+            local bva = Instance.new("BodyAngularVelocity", root)
+            bva.AngularVelocity = Vector3.new(0, 99999, 0)
+            bva.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            
+            -- Teleporta para o alvo repetidamente para garantir o fling
+            local connection
+            connection = RunService.Heartbeat:Connect(function()
+                if not target.Character or not bva.Parent then connection:Disconnect() return end
+                root.CFrame = tRoot.CFrame * CFrame.new(0, 0, 1)
+            end)
+            
+            task.wait(0.5) -- Tempo do ataque
+            connection:Disconnect()
+            bva:Destroy()
+            root.CFrame = oldCF -- Volta para onde estava
+        end
+    end
+end
+
+--// INTERFACE WINDUI V15
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Window = WindUI:CreateWindow({
-    Title = "Zaxin Hub | V13 Fling",
+    Title = "Zaxin Hub | V15 Fling Player",
     Author = "ZaxinX",
     Size = UDim2.fromOffset(550, 550)
 })
 
+-- ABA SELF (CONFIGURAÇÕES)
 local TabSelf = Window:Tab({Title = "Self", Icon = "user"})
-TabSelf:Section({Title = "Combate & Movimentação"})
+local SecDigit = TabSelf:Section({Title = "Configurações (Clique e Digite)"})
 
--- Novo Botão Fling Ball
-TabSelf:Toggle({
-    Title = "Ativar Fling Ball (Girar)",
-    Value = false,
-    Callback = function(s) ToggleFling(s) end
+SecDigit:Input({
+    Title = "Definir Velocidade Fly",
+    Placeholder = "Ex: 150",
+    Callback = function(t) flySpeed = tonumber(t) or flySpeed end
+})
+
+SecDigit:Input({
+    Title = "Definir Gravidade",
+    Placeholder = "Ex: 50",
+    Callback = function(t) workspace.Gravity = tonumber(t) or workspace.Gravity end
 })
 
 TabSelf:Toggle({Title = "Ativar Fly", Value = false, Callback = function(s) if s then StartFly() else StopFly() end end})
+TabSelf:Toggle({Title = "Invisibilidade FE", Value = false, Callback = function(s)
+    for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+        if v:IsA("BasePart") or v:IsA("Decal") then v.Transparency = s and 1 or 0 end
+    end
+end})
 
-TabSelf:Slider({
-    Title = "Velocidade Voo",
-    Min = 1, Max = 1000, Default = 50,
-    Callback = function(v) flySpeed = v end
-})
-
-TabSelf:Slider({
-    Title = "Gravidade",
-    Min = 0, Max = 500, Default = 196,
-    Callback = function(v) workspace.Gravity = v end
-})
-
-TabSelf:Toggle({Title = "Invisível (FE)", Value = false, Callback = function(s) ToggleInvis(s) end})
-
+-- ABA ADMIN (AÇÕES NO ALVO)
 local TabAdmin = Window:Tab({Title = "Admin & TP", Icon = "shield"})
-local SecAdmin = TabAdmin:Section({Title = "Alvos"})
+local SecAdmin = TabAdmin:Section({Title = "Gerenciar Jogador"})
 
-local selecionado
-local Dropdown = SecAdmin:Dropdown({
+SecAdmin:Dropdown({
     Title = "Selecionar Alvo",
     Values = (function() local t = {} for _,p in pairs(Players:GetPlayers()) do table.insert(t, p.Name) end return t end)(),
     Callback = function(v) selecionado = v end
 })
 
-SecAdmin:Button({Title = "TP ATÉ ELE", Callback = function() if selecionado then TeleportToPlayer(selecionado) end end})
-SecAdmin:Button({Title = "KILL", Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) end end})
-SecAdmin:Button({Title = "VIEW", Callback = function() if selecionado then Camera.CameraSubject = Players[selecionado].Character.Humanoid end end})
+SecAdmin:Button({
+    Title = "FLING (ARREMESSAR ALVO)",
+    Callback = function() if selecionado then FlingPlayer(selecionado) end end
+})
+
+SecAdmin:Button({
+    Title = "KICK (EXPULSAR)",
+    Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kick " .. selecionado) end end
+})
+
+SecAdmin:Button({
+    Title = "KILL (MATAR)",
+    Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) end end
+})
+
+SecAdmin:Button({
+    Title = "TP ATÉ ELE",
+    Callback = function() 
+        local t = Players:FindFirstChild(selecionado)
+        if t then LocalPlayer.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame end 
+    end
+})
+
+SecAdmin:Button({Title = "VIEW", Callback = function() Camera.CameraSubject = Players[selecionado].Character.Humanoid end})
 SecAdmin:Button({Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
 
-print("Zaxin Hub V13: Fling Ball adicionado e Sliders com digitação!")
+print("Zaxin Hub V15: Fling por seleção e Inputs numéricos prontos!")
