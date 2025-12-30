@@ -8,7 +8,7 @@ local LocalPlayer = Players.LocalPlayer
 
 --// Tabelas de Configuração
 local Autorizados = {
-    ["fh_user1"] = true,
+    ["10pereirazzk"] = true,
     ["Zelaojg"] = true,
     ["joaoluizzx"] = true,
     ["ZaxinX"] = true,
@@ -16,7 +16,7 @@ local Autorizados = {
 }
 
 local WhiteList = {
-    ["fh_user1"] = "Owner",
+    ["10pereirazzk"] = "Owner",
     ["Zelaojg"] = "Parceiro",
     ["joaoluizzx"] = "Staff",
 }
