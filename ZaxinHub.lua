@@ -17,22 +17,18 @@ local WhiteList = {
     [LocalPlayer.Name] = "Developer"
 }
 
---// VARIÁVEIS
-local flying = false
+--// VARIÁVEIS DE CONTROLE
 local flySpeed = 50
-local flyConn, bv, bg
+local flying = false
 local selecionado = nil
+local flyConn
 
---// FUNÇÃO FLY (REVISADA - SEM TRAVAR)
+--// FUNÇÃO FLY CORRIGIDA (NÃO TRAVA AO MOVER)
 local function StopFly()
     flying = false
     if flyConn then flyConn:Disconnect() flyConn = nil end
-    if bv then bv:Destroy() bv = nil end
-    if bg then bg:Destroy() bg = nil end
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
         LocalPlayer.Character.Humanoid.PlatformStand = false
-        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if root then root.Velocity = Vector3.new(0,0,0) end
     end
 end
 
@@ -43,76 +39,78 @@ local function StartFly()
     local root = char:WaitForChild("HumanoidRootPart")
     local hum = char:WaitForChild("Humanoid")
 
-    bg = Instance.new("BodyGyro", root)
-    bg.P = 9e4
-    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    bv = Instance.new("BodyVelocity", root)
-    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-
-    flyConn = RunService.RenderStepped:Connect(function()
+    flyConn = RunService.RenderStepped:Connect(function(dt)
         if not flying or not root then return end
         hum.PlatformStand = true
+        
         local moveDir = Vector3.new(0,0,0)
         local camCF = Camera.CFrame
+        
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-        bg.CFrame = camCF
-        bv.Velocity = moveDir.Magnitude > 0 and moveDir.Unit * flySpeed or Vector3.new(0,0,0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir + Vector3.new(0,-1,0) end
+        
+        if moveDir.Magnitude > 0 then
+            root.CFrame = root.CFrame + (moveDir.Unit * flySpeed * dt)
+        end
+        root.Velocity = Vector3.new(0,0,0) -- Impede gravidade de puxar ou travar
     end)
 end
 
---// FUNÇÃO FLING (PARA TIRAR QUEM NÃO USA SCRIPT)
-local function FlingPlayer(targetName)
+--// FUNÇÃO FLING (ARREMESSA O ALVO, NÃO VOCÊ)
+local function FlingTarget(targetName)
     local target = Players:FindFirstChild(targetName)
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     
     if target and target.Character and root then
         local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
-        if tRoot then
-            local oldCF = root.CFrame
-            local bva = Instance.new("BodyAngularVelocity", root)
-            bva.AngularVelocity = Vector3.new(999999, 999999, 999999)
-            bva.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            
-            local start = tick()
-            local connection
-            connection = RunService.Heartbeat:Connect(function()
-                if tick() - start > 1.5 or not tRoot then
-                    connection:Disconnect()
-                    bva:Destroy()
-                    root.CFrame = oldCF
-                    return
-                end
-                root.CFrame = tRoot.CFrame
-            end)
-        end
+        local oldCF = root.CFrame
+        
+        -- Cria uma força invisível de giro
+        local bva = Instance.new("BodyAngularVelocity", root)
+        bva.AngularVelocity = Vector3.new(0, 999999, 0)
+        bva.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        
+        local start = tick()
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            if tick() - start > 1.2 or not tRoot then
+                conn:Disconnect()
+                bva:Destroy()
+                root.CFrame = oldCF
+                return
+            end
+            -- Colide com o alvo em alta velocidade para arremessar
+            root.CFrame = tRoot.CFrame * CFrame.new(math.random(-1,1), 0, math.random(-1,1))
+        end)
     end
 end
 
---// INTERFACE WINDUI V18
+--// INTERFACE WINDUI V19
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Window = WindUI:CreateWindow({
-    Title = "Zaxin Hub | V18 Kick & Fling",
+    Title = "Zaxin Hub | V19 FINAL FIX",
     Author = "ZaxinX",
     Size = UDim2.fromOffset(550, 560)
 })
 
--- ABA SELF (Ajustes de número e voo)
 local TabSelf = Window:Tab({Title = "Self", Icon = "user"})
-local SecDigit = TabSelf:Section({Title = "Configurações (Clique e Digite)"})
+local SecDigit = TabSelf:Section({Title = "Configurações Numéricas"})
 
+-- INPUTS PARA NÚMEROS (VELOCIDADE E GRAVIDADE)
 SecDigit:Input({
-    Title = "Definir Velocidade Fly",
-    Placeholder = "Ex: 250",
+    Title = "Velocidade Fly (Digite número)",
+    Placeholder = "Ex: 100",
     Callback = function(t) flySpeed = tonumber(t) or flySpeed end
 })
 
 SecDigit:Input({
-    Title = "Definir Gravidade",
-    Placeholder = "Padrão: 196",
+    Title = "Gravidade (Digite número)",
+    Placeholder = "Normal: 196",
     Callback = function(t) workspace.Gravity = tonumber(t) or workspace.Gravity end
 })
 
@@ -123,7 +121,7 @@ TabSelf:Toggle({Title = "Invisibilidade FE", Value = false, Callback = function(
     end
 end})
 
--- ABA ADMIN (Ações nos outros)
+-- ABA ADMIN
 local TabAdmin = Window:Tab({Title = "Admin & TP", Icon = "shield"})
 local SecAd = TabAdmin:Section({Title = "Ações no Alvo Selecionado"})
 
@@ -133,24 +131,28 @@ SecAd:Dropdown({
     Callback = function(v) selecionado = v end
 })
 
-SecAd:Button({
-    Title = "KICK (EXPULSAR JOGADOR)",
-    Callback = function() 
-        if selecionado then 
-            -- Tenta expulsar via comando de chat (funciona se houver sistema de admin)
-            local chatChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if chatChannel then
-                chatChannel:SendAsync(";kick " .. selecionado)
-            end
-            WindUI:Notify({Title = "Comando Enviado", Content = "Tentando expulsar: " .. selecionado})
-        end 
+-- OPÇÕES DE COMBATE E ADMIN
+SecAd:Button({Title = "FLING (ARREMESSAR ALVO)", Callback = function() if selecionado then FlingTarget(selecionado) end end})
+
+SecAd:Button({Title = "KILL (MATAR)", Callback = function()
+    if selecionado then 
+        -- Método Kill via Chat ou Fling Rápido
+        FlingTarget(selecionado)
+        TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) 
     end
-})
+end})
 
-SecAd:Button({Title = "ULTRA FLING (SUMIR COM ELE)", Callback = function() if selecionado then FlingPlayer(selecionado) end end})
-SecAd:Button({Title = "KILL (MATAR)", Callback = function() if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kill " .. selecionado) end end})
-SecAd:Button({Title = "TP ATÉ ELE", Callback = function() if selecionado then LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame end end})
-SecAd:Button({Title = "VIEW (VER)", Callback = function() if selecionado then Camera.CameraSubject = Players[selecionado].Character.Humanoid end end})
-SecAd:Button({Title = "UNVIEW (VOLTAR)", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
+SecAd:Button({Title = "KICK (EXPULSAR)", Callback = function()
+    if selecionado then TextChatService.TextChannels.RBXGeneral:SendAsync(";kick " .. selecionado) end
+end})
 
-print("Zaxin Hub V18: Kick e Fling para não-usuários prontos!")
+SecAd:Button({Title = "TP ATÉ ELE", Callback = function()
+    if selecionado and Players:FindFirstChild(selecionado) then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = Players[selecionado].Character.HumanoidRootPart.CFrame
+    end
+end})
+
+SecAd:Button({Title = "VIEW", Callback = function() if selecionado then Camera.CameraSubject = Players[selecionado].Character.Humanoid end end})
+SecAd:Button({Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end})
+
+print("Zaxin Hub V19: Fly estável e Fling por alvo pronto!")
