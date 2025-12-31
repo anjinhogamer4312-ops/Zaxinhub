@@ -23,8 +23,9 @@ local JUMPSCARES = {
 --// Variáveis
 local flySpeed = 50
 local flying = false
-local espEnabled = false
+local noclip = false
 local currentAudio = nil
+local noclipConnection
 
 --// --- FUNÇÃO JUMPSCARE ---
 local function AtivarJumpscare(data)
@@ -39,10 +40,23 @@ local function AtivarJumpscare(data)
     gui:Destroy(); s:Destroy()
 end
 
---// --- RECEBIMENTO DE COMANDOS ---
+--// --- LÓGICA NOCLIP ---
+RunService.Stepped:Connect(function()
+    if noclip and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+end)
+
+--// --- RECEBIMENTO DE COMANDOS (Áudio sem Tags) ---
 local function ExecutarComando(msg, autor)
     local texto = msg:lower(); local alvo = LocalPlayer.Name:lower()
+    
+    -- Jumpscares
     for cmd, data in pairs(JUMPSCARES) do if texto:find(cmd) and texto:find(alvo) then AtivarJumpscare(data) end end
+    
+    -- Áudio (Tenta ler o ID mesmo se houver caracteres em volta para evitar tags)
     if texto:find(";audioall") then
         local id = texto:match("%d+")
         if id then 
@@ -58,7 +72,7 @@ if Autorizados[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
     local Window = WindUI:CreateWindow({ Title = "Zaxin Hub", Author = "by: ZaxinX", Size = UDim2.fromOffset(580, 460) })
 
-    -- Botão Minimizar (Apenas o Z na tela)
+    -- Botão Minimizar "Z"
     local MiniButton = Instance.new("ScreenGui", game.CoreGui); local Btn = Instance.new("TextButton", MiniButton)
     Btn.Size = UDim2.new(0, 45, 0, 45); Btn.Position = UDim2.new(0, 15, 0.5, 0); Btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     Btn.Text = "Z"; Btn.TextColor3 = Color3.new(1,1,1); Btn.TextSize = 20; Instance.new("UICorner", Btn).CornerRadius = UDim.new(1,0)
@@ -83,6 +97,7 @@ if Autorizados[LocalPlayer.Name] then
             end)
         end
     end })
+    SecMov:Toggle({ Title = "Noclip", Callback = function(s) noclip = s end })
     SecMov:Input({ Title = "Fly Speed", Callback = function(v) flySpeed = tonumber(v) or 50 end })
 
     -- ABA ÁUDIO
@@ -90,7 +105,12 @@ if Autorizados[LocalPlayer.Name] then
     local SecA = TabAud:Section({ Title = "Global", Opened = true })
     local audID = ""
     SecA:Input({ Title = "ID do Som", Callback = function(v) audID = v end })
-    SecA:Button({ Title = "AUDIO ALL", Callback = function() if audID ~= "" then TextChatService.TextChannels.RBXGeneral:SendAsync(";audioall "..audID) end end })
+    SecA:Button({ Title = "AUDIO ALL", Callback = function() 
+        if audID ~= "" then 
+            -- Envia o ID com um ponto para tentar burlar o filtro de números do chat
+            TextChatService.TextChannels.RBXGeneral:SendAsync(";audioall ."..audID..".") 
+        end 
+    end })
     SecA:Button({ Title = "STOP ALL", Callback = function() if currentAudio then currentAudio:Stop() end end })
 
     -- ABA ADMIN
@@ -104,9 +124,8 @@ if Autorizados[LocalPlayer.Name] then
     SecAd:Button({ Title = "KILL", Callback = function() Cmd("kill") end })
     SecAd:Button({ Title = "FLING", Callback = function() Cmd("fling") end })
     SecAd:Button({ Title = "JAIL", Callback = function() Cmd("jail") end })
-    SecAd:Button({ Title = "UNJAIL", Callback = function() Cmd("unjail") end })
-    SecAd:Button({ Title = "FREEZE (Congelar)", Callback = function() Cmd("freeze") end })
-    SecAd:Button({ Title = "UNFREEZE (Descongelar)", Callback = function() Cmd("unfreeze") end })
+    SecAd:Button({ Title = "FREEZE", Callback = function() Cmd("freeze") end })
+    SecAd:Button({ Title = "EXPLODE", Callback = function() Cmd("explode") end })
     
     -- ABA JUMPSCARES
     local TabJ = Window:Tab({ Title = "Jumpscares", Icon = "zap" })
