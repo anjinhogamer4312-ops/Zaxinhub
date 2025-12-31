@@ -31,41 +31,6 @@ local noclip = false
 local espEnabled = false
 local espSettings = { boxes = false, names = false, tracers = false }
 local currentAudio = nil
-local noclipConnection
-
---// --- FUNÇÕES AUXILIARES ---
-
-local function AtivarJumpscare(data)
-    local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-    gui.IgnoreGuiInset = true
-    local img = Instance.new("ImageLabel", gui)
-    img.Size = UDim2.new(1,0,1,0); img.Image = data.img; img.BackgroundTransparency = 1
-    local s = Instance.new("Sound", workspace)
-    s.SoundId = data.snd; s.Volume = 10; s:Play()
-    task.wait(2.5)
-    gui:Destroy(); s:Destroy()
-end
-
-local function toggleFly()
-    flying = not flying
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum then return end
-    if flying then
-        hum.PlatformStand = true
-        local bg = Instance.new("BodyGyro", root); bg.Name = "ZaxinFlyBG"; bg.P = 9e4; bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-        local bv = Instance.new("BodyVelocity", root); bv.Name = "ZaxinFlyBV"; bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
-        task.spawn(function()
-            while flying do
-                bg.cframe = Camera.CFrame
-                bv.velocity = (hum.MoveDirection.Magnitude > 0) and (Camera.CFrame.LookVector * flySpeed) or Vector3.new(0,0,0)
-                RunService.RenderStepped:Wait()
-            end
-            bg:Destroy(); bv:Destroy(); hum.PlatformStand = false
-        end)
-    end
-end
 
 --// --- SISTEMA DE ESP ---
 local function createESP(player)
@@ -87,34 +52,55 @@ end
 for _,p in pairs(Players:GetPlayers()) do createESP(p) end
 Players.PlayerAdded:Connect(createESP)
 
---// --- COMANDOS DE CHAT ---
-local function ExecutarComando(msg, autor)
-    local texto = msg:lower(); local alvo = LocalPlayer.Name:lower()
-    for cmd, data in pairs(JUMPSCARES) do if texto:find(cmd) and texto:find(alvo) then AtivarJumpscare(data) end end
-    if texto:find(";audioall") then
-        local id = texto:match("%d+")
-        if id then if currentAudio then currentAudio:Destroy() end currentAudio = Instance.new("Sound", workspace); currentAudio.SoundId = "rbxassetid://"..id; currentAudio.Volume = 5; currentAudio:Play() end
-    end
-    if texto:find(";view") and texto:find(alvo) then Camera.CameraSubject = Players:FindFirstChild(autor).Character.Humanoid end
-    if texto:find(";unview") and texto:find(alvo) then Camera.CameraSubject = LocalPlayer.Character.Humanoid end
-    if texto:find(";kill") and texto:find(alvo) then LocalPlayer.Character:BreakJoints() end
-end
-TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then ExecutarComando(msg.Text, msg.TextSource.Name) end end)
-
 --// --- INTERFACE WINDUI ---
 if Autorizados[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-    local Window = WindUI:CreateWindow({ Title = "Zaxin Hub | Premium", Author = "by: ZaxinX", Size = UDim2.fromOffset(580, 460) })
+    local Window = WindUI:CreateWindow({ 
+        Title = "Zaxin Hub | Premium", 
+        Author = "by: ZaxinX", 
+        Size = UDim2.fromOffset(580, 460) 
+    })
+
+    -- BOTÃO PERSONALIZADO PARA MINIMIZAR (SEM BUGAR O PAINEL)
+    local MiniButton = Instance.new("ScreenGui", game.CoreGui)
+    local Btn = Instance.new("TextButton", MiniButton)
+    Btn.Size = UDim2.new(0, 50, 0, 50)
+    Btn.Position = UDim2.new(0.05, 0, 0.4, 0)
+    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Btn.Text = "Z"
+    Btn.TextColor3 = Color3.new(1, 1, 1)
+    Btn.TextSize = 25
+    Btn.Font = Enum.Font.SourceSansBold
     
-    Window:EditOpenButton({ Title = "Zaxin Hub", Icon = "shield", Color = Color3.fromRGB(0, 255, 127) })
+    local Corner = Instance.new("UICorner", Btn)
+    Corner.CornerRadius = UDim.new(1, 0) -- Deixa redondo
+
+    Btn.MouseButton1Click:Connect(function()
+        Window:Toggle() -- Abre/Fecha o painel
+    end)
 
     -- ABA SELF
     local TabSelf = Window:Tab({ Title = "Self", Icon = "user" })
     local SecMov = TabSelf:Section({ Title = "Movimentação", Opened = true })
-    SecMov:Toggle({ Title = "Fly", Callback = toggleFly })
+    SecMov:Toggle({ Title = "Fly", Callback = function() 
+        flying = not flying
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if flying and root then
+            local bg = Instance.new("BodyGyro", root); bg.P = 9e4; bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+            local bv = Instance.new("BodyVelocity", root); bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+            task.spawn(function()
+                while flying do
+                    bg.cframe = Camera.CFrame
+                    bv.velocity = (char.Humanoid.MoveDirection.Magnitude > 0) and (Camera.CFrame.LookVector * flySpeed) or Vector3.new(0,0,0)
+                    task.wait()
+                end
+                bg:Destroy(); bv:Destroy()
+            end)
+        end
+    end })
     SecMov:Toggle({ Title = "Noclip", Callback = function(s) noclip = s end })
-    SecMov:Input({ Title = "Fly Speed", Placeholder = "Ex: 100", Callback = function(v) flySpeed = tonumber(v) or 50 end })
-    SecMov:Button({ Title = "Server Hop", Callback = function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end })
+    SecMov:Input({ Title = "Fly Speed", Callback = function(v) flySpeed = tonumber(v) or 50 end })
 
     -- ABA VISUAL
     local TabVis = Window:Tab({ Title = "Visual", Icon = "eye" })
@@ -130,22 +116,19 @@ if Autorizados[LocalPlayer.Name] then
     local cID = ""
     SecAud:Input({ Title = "ID do Áudio", Callback = function(v) cID = v end })
     SecAud:Button({ Title = "AUDIO ALL", Callback = function() if cID ~= "" then TextChatService.TextChannels.RBXGeneral:SendAsync(";audioall "..cID) end end })
-    SecAud:Button({ Title = "Parar Áudio", Callback = function() if currentAudio then currentAudio:Stop() end end })
 
     -- ABA ADMIN
     local TabAdm = Window:Tab({ Title = "Admin", Icon = "shield" })
     local SecAdm = TabAdm:Section({ Title = "Comandos Admin", Opened = true })
     local Target = ""
-    SecAdm:Dropdown({ Title = "Selecionar Alvo", Values = (function() local t={}; for _,p in pairs(Players:GetPlayers()) do table.insert(t,p.Name) end; return t end)(), Callback = function(v) Target = v end })
+    SecAdm:Dropdown({ Title = "Alvo", Values = (function() local t={}; for _,p in pairs(Players:GetPlayers()) do table.insert(t,p.Name) end; return t end)(), Callback = function(v) Target = v end })
     
-    SecAdm:Button({ Title = "VIEW", Callback = function() local p = Players:FindFirstChild(Target) if p then Camera.CameraSubject = p.Character.Humanoid end end })
-    SecAdm:Button({ Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end })
-    
-    local cmds = {"kill", "kick", "fling", "jail", "unjail"}
+    local cmds = {"kill", "kick", "fling", "jail", "unjail", "view", "unview"}
     for _, c in ipairs(cmds) do 
         SecAdm:Button({ Title = c:upper(), Callback = function() 
-            local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if canal and Target ~= "" then canal:SendAsync(";"..c.." "..Target) end 
+            if c == "view" then Camera.CameraSubject = Players[Target].Character.Humanoid
+            elseif c == "unview" then Camera.CameraSubject = LocalPlayer.Character.Humanoid
+            else TextChatService.TextChannels.RBXGeneral:SendAsync(";"..c.." "..Target) end
         end }) 
     end
     
@@ -154,8 +137,7 @@ if Autorizados[LocalPlayer.Name] then
     local SecJ = TabJump:Section({ Title = "Executar Jumpscare", Opened = true })
     for i=1,4 do 
         SecJ:Button({ Title = "Jumpscare "..i, Callback = function() 
-            local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-            if canal and Target ~= "" then canal:SendAsync(";jumps"..i.." "..Target) end 
+            TextChatService.TextChannels.RBXGeneral:SendAsync(";jumps"..i.." "..Target) 
         end }) 
     end
 end
