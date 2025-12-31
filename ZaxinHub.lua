@@ -1,6 +1,5 @@
 --// Serviços
 local Players = game:GetService("Players")
-local TextChatService = game:GetService("TextChatService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -13,65 +12,49 @@ local Autorizados = {
     [LocalPlayer.Name] = true
 }
 
-local JUMPSCARES = {
-    ["jumps1"] = {img = "rbxassetid://126754882337711", snd = "rbxassetid://138873214826309"},
-    ["jumps2"] = {img = "rbxassetid://86379969987314", snd = "rbxassetid://143942090"},
-    ["jumps3"] = {img = "rbxassetid://127382022168206", snd = "rbxassetid://143942090"},
-    ["jumps4"] = {img = "rbxassetid://95973611964555", snd = "rbxassetid://138873214826309"},
-}
-
 --// Variáveis de Controle
 local flySpeed = 50
 local flying = false
 local noclip = false
-local currentAudio = nil
+local espEnabled = false
 
---// --- LÓGICA DE EXECUÇÃO LOCAL ---
-local function AplicarEfeito(cmd, alvoNome)
-    if alvoNome:lower() ~= LocalPlayer.Name:lower() then return end
-    
-    if cmd == "kill" then LocalPlayer.Character:BreakJoints()
-    elseif cmd == "freeze" then LocalPlayer.Character.HumanoidRootPart.Anchored = true
-    elseif cmd == "unfreeze" then LocalPlayer.Character.HumanoidRootPart.Anchored = false
-    elseif cmd:find("jumps") then
-        local data = JUMPSCARES[cmd]
-        if data then
-            local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-            gui.IgnoreGuiInset = true; gui.DisplayOrder = 999
-            local img = Instance.new("ImageLabel", gui)
-            img.Size = UDim2.new(1,0,1,0); img.Image = data.img; img.BackgroundTransparency = 1; img.ZIndex = 999
-            local s = Instance.new("Sound", workspace)
-            s.SoundId = data.snd; s.Volume = 10; s:Play()
-            task.wait(2.5); gui:Destroy(); s:Destroy()
-        end
+--// --- SISTEMA DE ESP (Boxes e Nomes) ---
+local function createESP(player)
+    local box = Drawing.new("Square"); box.Visible = false; box.Color = Color3.fromRGB(255, 0, 0); box.Thickness = 1
+    local name = Drawing.new("Text"); name.Visible = false; name.Color = Color3.new(1, 1, 1); name.Size = 14; name.Outline = true
+
+    RunService.RenderStepped:Connect(function()
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player ~= LocalPlayer and espEnabled then
+            local root = player.Character.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            if onScreen then
+                box.Size = Vector2.new(2000/pos.Z, 3000/pos.Z)
+                box.Position = Vector2.new(pos.X - box.Size.X/2, pos.Y - box.Size.Y/2); box.Visible = true
+                name.Position = Vector2.new(pos.X, pos.Y - 25); name.Text = player.Name; name.Visible = true
+            else box.Visible = false; name.Visible = false end
+        else box.Visible = false; name.Visible = false end
+    end)
+end
+for _,p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+
+--// --- FUNÇÃO FLING (Para Brookhaven) ---
+local function BrookhavenFling(targetPlayer)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local targetChar = targetPlayer.Character
+    local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+
+    if hrp and targetHrp then
+        local velocity = hrp.Velocity
+        hrp.Velocity = Vector3.new(500000, 500000, 500000) -- Força física para jogar longe
+        hrp.CFrame = targetHrp.CFrame
+        task.wait(0.1)
+        hrp.Velocity = velocity
     end
 end
 
---// --- RECEBIMENTO DE MENSAGENS ---
-TextChatService.MessageReceived:Connect(function(msg)
-    if msg.TextSource and Autorizados[msg.TextSource.Name] then
-        local m = msg.Text:lower()
-        -- Identifica o comando e o alvo dentro da string camuflada
-        local cmd = m:match("{(%w+)}")
-        local alvo = m:match("target:(%w+)")
-        
-        if cmd and alvo then
-            AplicarEfeito(cmd, alvo)
-        end
-        
-        -- Lógica especial para Áudio (burlar tag)
-        if m:find("aud:") then
-            local id = m:match("%d+")
-            if id then
-                if currentAudio then currentAudio:Destroy() end
-                currentAudio = Instance.new("Sound", workspace)
-                currentAudio.SoundId = "rbxassetid://"..id; currentAudio.Volume = 5; currentAudio:Play()
-            end
-        end
-    end
-end)
-
---// --- NOCLIP PERMANENTE ---
+--// --- NOCLIP ---
 RunService.Stepped:Connect(function()
     if noclip and LocalPlayer.Character then
         for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
@@ -80,10 +63,10 @@ RunService.Stepped:Connect(function()
     end
 end)
 
---// --- INTERFACE ---
+--// --- INTERFACE WINDUI ---
 if Autorizados[LocalPlayer.Name] then
     local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-    local Window = WindUI:CreateWindow({ Title = "Zaxin Hub", Author = "by: ZaxinX", Size = UDim2.fromOffset(580, 460) })
+    local Window = WindUI:CreateWindow({ Title = "Zaxin Hub | Brookhaven", Author = "by: ZaxinX", Size = UDim2.fromOffset(580, 460) })
 
     -- Botão "Z" para Minimizar
     local MiniButton = Instance.new("ScreenGui", game.CoreGui); local Btn = Instance.new("TextButton", MiniButton)
@@ -93,8 +76,7 @@ if Autorizados[LocalPlayer.Name] then
 
     -- ABA SELF
     local TabSelf = Window:Tab({ Title = "Self", Icon = "user" })
-    local SecS = TabSelf:Section({ Title = "Movimentação", Opened = true })
-    SecS:Toggle({ Title = "Fly", Callback = function(s) 
+    TabSelf:Toggle({ Title = "Fly", Callback = function(s) 
         flying = s
         if flying then
             task.spawn(function()
@@ -110,42 +92,28 @@ if Autorizados[LocalPlayer.Name] then
             end)
         end
     end })
-    SecS:Toggle({ Title = "Noclip", Callback = function(s) noclip = s end })
-    SecS:Input({ Title = "Velocidade Fly", Callback = function(v) flySpeed = tonumber(v) or 50 end })
+    TabSelf:Toggle({ Title = "Noclip", Callback = function(s) noclip = s end })
+    TabSelf:Input({ Title = "Velocidade Fly", Callback = function(v) flySpeed = tonumber(v) or 50 end })
 
-    -- ABA ÁUDIO (SEM TAGS)
-    local TabAud = Window:Tab({ Title = "Áudio", Icon = "music" })
-    local audID = ""
-    TabAud:Input({ Title = "ID do Áudio", Callback = function(v) audID = v end })
-    TabAud:Button({ Title = "AUDIO ALL", Callback = function() 
-        if audID ~= "" then
-            -- Camuflagem absoluta: mistura letras e números
-            local disguised = "aud:" .. audID:gsub("(%d)", "%1-")
-            TextChatService.TextChannels.RBXGeneral:SendAsync(disguised)
-        end
-    end })
-    TabAud:Button({ Title = "STOP ALL", Callback = function() if currentAudio then currentAudio:Stop() end end })
+    -- ABA VISUAL
+    local TabVis = Window:Tab({ Title = "Visual", Icon = "eye" })
+    TabVis:Toggle({ Title = "Ativar ESP", Callback = function(s) espEnabled = s end })
 
-    -- ABA ADMIN
+    -- ABA ADMIN (BROOKHAVEN)
     local TabAdm = Window:Tab({ Title = "Admin", Icon = "shield" })
     local Alvo = ""
     TabAdm:Dropdown({ Title = "Alvo", Values = (function() local t={}; for _,p in pairs(Players:GetPlayers()) do table.insert(t,p.Name) end; return t end)(), Callback = function(v) Alvo = v end })
     
-    local function Mandar(c)
-        if Alvo ~= "" then
-            TextChatService.TextChannels.RBXGeneral:SendAsync("command:{"..c.."} target:"..Alvo)
-        end
-    end
-
-    TabAdm:Button({ Title = "KILL", Callback = function() Mandar("kill") end })
-    TabAdm:Button({ Title = "FREEZE", Callback = function() Mandar("freeze") end })
-    TabAdm:Button({ Title = "UNFREEZE", Callback = function() Mandar("unfreeze") end })
-    TabAdm:Button({ Title = "VIEW", Callback = function() Camera.CameraSubject = Players[Alvo].Character.Humanoid end })
+    TabAdm:Button({ Title = "FLING (Jogar Longe)", Callback = function() 
+        local p = Players:FindFirstChild(Alvo)
+        if p then BrookhavenFling(p) end
+    end })
+    
+    TabAdm:Button({ Title = "VIEW PLAYER", Callback = function() if Alvo ~= "" then Camera.CameraSubject = Players[Alvo].Character.Humanoid end end })
     TabAdm:Button({ Title = "UNVIEW", Callback = function() Camera.CameraSubject = LocalPlayer.Character.Humanoid end })
-
-    -- ABA JUMPSCARES
-    local TabJ = Window:Tab({ Title = "Jumpscares", Icon = "zap" })
-    for i=1,4 do
-        TabJ:Button({ Title = "Jumpscare "..i, Callback = function() Mandar("jumps"..i) end })
-    end
+    
+    TabAdm:Button({ Title = "GOTO (Teleportar)", Callback = function() 
+        local p = Players:FindFirstChild(Alvo)
+        if p and p.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame end
+    end })
 end
